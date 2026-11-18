@@ -1605,7 +1605,8 @@
   const saveBgs = () => { try { localStorage.setItem(BGCACHE, JSON.stringify(bgData)); } catch (e) {} };
   function loadBackgrounds(force) {
     if (!window.rhNet || bgLoading) return;
-    const fresh = bgData && bgData.list && bgData.list.length && !force && Date.now() - bgData.at < 7 * 864e5;
+    // v2: Dittobase ergänzt Listen nachträglich (z. B. Dark Skies 49 → 75 Arten), daher alle 3 Tage komplett neu
+    const fresh = bgData && bgData.v === 2 && bgData.list && bgData.list.length && !force && Date.now() - bgData.at < 3 * 864e5;
     if (fresh) {
       // Lücken nachladen: Seiten, die beim letzten Mal nicht geladen werden konnten
       const miss = bgData.list.filter(b => !b.ok && !(b.dex && b.dex.length));
@@ -1625,14 +1626,15 @@
         let name = (im && im.getAttribute('alt')) || txt.replace(/[A-Z][a-z]{2} \d{1,2}, \d{4}.*$/, '').trim() || m[1];
         seen[m[1]] = 1; list.push({ id: m[1], n: name, img: im ? (im.getAttribute('src') || '') : '', d: date ? new Date(date[1]).getTime() : 0, dex: [] });
       });
-      return fetchBgDetails(list).then(() => { bgData = { at: Date.now(), list }; saveBgs(); });
+      return fetchBgDetails(list).then(() => { bgData = { v: 2, at: Date.now(), list }; saveBgs(); });
     }).catch(() => {}).then(() => { bgLoading = null; renderAll(); });
   }
   function renderBgProgress() { document.querySelectorAll('.bgprog').forEach(el => { el.textContent = bgLoading ? 'Lade Hintergrund-Liste … ' + bgLoading.done + '/' + (bgLoading.total || '?') : ''; }); }
   // Ergänzungen, wo Dittobase unvollständig ist (laut offizieller Event-Seite)
   const BG_EXTRA = { 'lc-wild-area-mexico-city-2026': [888, 889], 'lc-wild-area-sendai-2026': [888, 889] };
   // Hintergründe, die bei Dittobase fehlen. Día de Muertos 2026: Duskull und Gigadynamax-Gengar vor Ort in Mexiko-Stadt mit Ortshintergrund (gleiche Ortskarte wie City Safari 2023)
-  const BG_ADD = [{ id: 'x-dia-de-muertos-2026-cdmx', n: 'Día de Muertos 2026 Mexico City (Ort)', d: new Date('2026-10-31').getTime(), dex: [94, 355], imgFrom: 'lc-city-safari-2023-mexico-city' }];
+  const BG_ADD = [{ id: 'x-wcs-2026-twitch-tinkaton', n: 'Weltmeister-Granforgita (Twitch-Drop WM 2026)', d: new Date('2026-08-28').getTime(), dex: [959], imgFrom: 'lc-wcs-2026-san-francisco' },
+    { id: 'x-dia-de-muertos-2026-cdmx', n: 'Día de Muertos 2026 Mexico City (Ort)', d: new Date('2026-10-31').getTime(), dex: [94, 355], imgFrom: 'lc-city-safari-2023-mexico-city' }];
   function bgList() {
     if (!bgData || !bgData.list) return [];
     return bgData.list.concat(BG_ADD.map(x => Object.assign({ img: ((bgData.list.find(b => b.id === x.imgFrom) || {}).img) || '' }, x)));
