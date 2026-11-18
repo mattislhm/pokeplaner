@@ -468,7 +468,9 @@
       const line = b => esc(mv(b.f).n) + kindTag(sp, b.f) + ' → ' + esc(b.mm.n) + ' ' + typeTag(b.mm.t);
       if (m.mode === 'g') {
         const bf = best.f === m.fast ? null : best;
-        out.push('<div class="adv ok"><b>Dyna-Kämpfe:</b> ' + esc(sp.gx[0]) + ' ist fest. Die Schnell-Attacke lädt nur die Dyna-Anzeige' + (bf ? ', am schnellsten mit ' + esc(mv(bf.f).n) + kindTag(sp, bf.f) : ' ✔') + '.</div>');
+        const minD = Math.min(...fastPool(sp).filter(f => !isRandomType(f)).map(f => mv(f).d)), fastest = fastPool(sp).filter(f => !isRandomType(f) && mv(f).d === minD);
+        const ok = m.fast && mv(m.fast) && mv(m.fast).d === minD;
+        out.push('<div class="adv ' + (ok || !m.fast ? 'ok' : 'up') + '"><b>Dyna-Kämpfe:</b> ' + esc(sp.gx[0]) + ' ist fest. Die Schnell-Attacke lädt nur die Dyna-Anzeige, also zählt nur ihre Geschwindigkeit' + (ok ? ' ✔' : ': am schnellsten ' + (fastest.length > 1 ? 'sind ' : 'ist ') + fastest.map(f => esc(mv(f).n) + kindTag(sp, f)).join(', ') + ' (' + String(minD).replace('.', ',') + ' s)') + '.</div>');
       } else if (!m.fast || curRef < best.d) {
         const gain = curRef ? Math.round((best.d / curRef - 1) * 100) : null;
         out.push('<div class="adv up"><b>Dyna-Kämpfe besser:</b> ' + line(best) + (gain ? ' <span class="muted">(+' + gain + '% Dyna-Schaden)</span>' : '') +
@@ -1141,7 +1143,13 @@
   function keepReasons(m) {
     const r = [];
     if (m.fav) r.push('Favorit'); if ((m.tags || []).length) r.push('markiert'); if (m.shiny) r.push('Shiny'); if (m.lucky) r.push('Glück');
-    if (m.mode !== 'n') r.push(MODE_NAME[m.mode]); if (isHundo(m)) r.push('Hundo');
+    if (m.mode !== 'n') r.push(MODE_NAME[m.mode]); if (isHundo(m)) r.push('Hundo'); if (m.pvp) r.push('PvP');
+    // gute PvP-IVs (Top 10 %) für Super- oder Hyperliga, wenn die Art dort in der Meta ist und die WP noch passen
+    if (hasIV(m) && typeof pvp !== 'undefined' && pvp) [[1500, 'Superliga'], [2500, 'Hyperliga']].forEach(([cap, n]) => {
+      const meta = metaOf('all|' + cap), id = pvIdOf(m), pos = meta.findIndex(x => x.id === id);
+      if (pos < 0 || pos >= 150) return; const wpv = Number(m.wp) || (statsOf(m).l ? statsOf(m).cp : 0); if (wpv > cap) return;
+      const rk = myRank(m, cap); if (rk && rk.rank <= PV_TOP) r.push('PvP-IVs ' + n + ' (Rang ' + rk.rank + ')');
+    });
     return r;
   }
   function renderCleanup() {
@@ -1268,7 +1276,7 @@
   }
   const pvIdOf = m => { const b = PVREV[m.k]; return b ? b + (m.crypto ? '_shadow' : '') : null; };
   const eligibleBuild = (m, cap) => eligible(m, cap);
-  function eligible(m, cap) { if (cap >= 10000) return true; const st = statsOf(m); return !st.l || st.cp <= cap; }
+  function eligible(m, cap) { if (cap >= 10000) return true; const w = Number(m.wp); if (w) return w <= cap; const st = statsOf(m); return !st.l || st.cp <= cap; }
   // Matchup-Schätzung: PvPoke-Daten (Top-Siege/-Niederlagen), sonst Typen (eigene Attacken gegen Gegner-Typen und umgekehrt)
   function matchScore(me, th, l) {
     const meta = metaOf(l), me2 = me.pv && meta.find(x => x.id === me.pv), th2 = meta.find(x => x.id === th.id);
@@ -1362,7 +1370,7 @@
     return out.map(r => ({ team: fixed.concat(r.add), pct: Math.round(r.sc / top * 100) }));
   }
   const buildAround = (anchor, pool, l, threats) => { const s = suggestTeams([anchor], pool, l, threats, 1)[0]; return s ? s.team : [anchor]; };
-  window.__pvTest = { myRank, buildAround, suggestTeams, metaOf, threatOf, memberFromMon, memberFromMeta, pvp: () => pvp };
+  window.__pvTest = { pvStatus, myRank, buildAround, suggestTeams, metaOf, threatOf, memberFromMon, memberFromMeta, pvp: () => pvp };
   let pvSugg = null, pvPick = null;
   // Teammitglied anzeigen: bei eigenen Pokémon anklickbar (öffnet es in Meine Pokémon) mit WP, IVs und Attacken
   const memberChip = (c, dim) => c.m ? '<span class="tmem' + (dim ? ' dim' : '') + '" data-detail="' + c.m.uid + '" title="Öffnen">' + img(c.sp, 'mini', c.m.shiny) + '<span><b>' + esc(c.sp.de) + (c.m.crypto ? ' <small>Crypto</small>' : '') + '</b><small>' + esc(c.info || '') + '</small></span></span>'
@@ -1471,7 +1479,7 @@
         '<div class="tmems">' + team.filter(Boolean).map(c => memberChip(c)).join('') + '</div>' +
         '<table class="cov"><tr><th>Top-Meta</th>' + team.map(t => '<th>' + (t ? '<span' + (t.m ? ' class="lnk" data-detail="' + t.m.uid + '"' : '') + '>' + img(t.sp, 'mini') + esc(t.sp.de) + '</span>' : '–') + '</th>').join('') + '</tr>' +
         ev.map(r => '<tr><td>' + img(r.th.sp, 'mini') + esc(r.th.sp.de) + (r.th.shadow ? ' <small>Crypto</small>' : '') + '</td>' + r.sc.map(cell).join('') + '</tr>').join('') + '</table>' +
-        '<div class="muted small">✓ gewinnt meist · ≈ offen · ✗ verliert meist. Aus den Top-Siegen/-Niederlagen von PvPoke, sonst nach Typen geschätzt (keine echte Kampf-Simulation).</div>' : '<div class="empty">Wähl ein Pokémon in Slot 1 und klick „Team um Slot 1 bauen“, oder stell alle drei selbst zusammen.</div>');
+        '<div class="muted small">✓ gewinnt meist · ≈ offen · ✗ verliert meist. Aus den Top-Siegen/-Niederlagen von PvPoke, sonst nach Typen geschätzt (keine echte Kampf-Simulation).</div>' : '<div class="empty">Klick auf einen Slot und wähl ein Pokémon. Dann „Vorschläge für die leeren Slots“, oder stell alle drei selbst zusammen.</div>');
     window.__pvBuild = () => {
       const fixed = team.filter(Boolean); if (!fixed.length || fixed.length >= 3) { pvSugg = null; renderPvp(); return; }
       pvSugg = { l, fixed: fixed.map(c => c.label), list: suggestTeams(fixed, pool, l, threats, 5), nReady: mySugg.length }; renderPvp();
