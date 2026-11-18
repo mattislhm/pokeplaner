@@ -1193,13 +1193,11 @@
     const id = (PVREV[sp.k] || '') + (m.crypto ? '_shadow' : '');
     const rows = leagues.map(([k, n, cap]) => {
       if (!pvp.L[k]) { loadLeague(k); return '<div class="sub">' + n + ': Meta wird geladen …</div>'; }
-      const i = pvp.L[k].findIndex(x => x.id === id);
-      if (i < 0) return '<div class="sub muted">' + n + ': nicht unter den Top 300</div>';
-      const e = pvp.L[k][i], [f, c1, c2] = e.ms;
-      const mine = [m.fast, m.c1, m.c2].filter(Boolean), want = [pvFast(f), pvCharged(c1), c2 && pvCharged(c2)].filter(Boolean);
-      const miss = want.filter(x => !mine.includes(x));
-      return '<div class="sub"><b>' + n + '</b> Platz ' + (i + 1) + (wp > cap ? ' <span class="muted">(dein WP ist zu hoch)</span>' : '') + ': ' + esc(pvName(f, true)) + ' / ' + esc(pvName(c1)) + (c2 ? ' / ' + esc(pvName(c2)) : '') +
-        (mine.length ? (miss.length ? ' <span class="up2">fehlt: ' + miss.map(x => esc(mv(x).n)).join(', ') + '</span>' : ' ✔') : '') + '</div>';
+      const ps = pvStatus(m, { key: k, cp: cap >= 1e9 ? 10000 : cap }), e = ps.rank ? pvp.L[k][ps.rank - 1] : null;
+      if (!e) return '<div class="sub muted">' + n + ': nicht unter den Top 300</div>';
+      const [f, c1, c2] = e.ms;
+      return '<div class="sub"><b>' + n + '</b> Platz ' + ps.rank + ' · Score ' + ps.score.toFixed(1) + ' · ' + esc(pvName(f, true)) + ' / ' + esc(pvName(c1)) + (c2 ? ' / ' + esc(pvName(c2)) : '') +
+        (ps.ok ? ' <span class="rdy ok">✓ fertig</span>' : '<div class="up2">fehlt: ' + ps.issues.map(esc).join(' · ') + '</div>') + '</div>';
     });
     const fit = wp && wp <= 1500 ? 'Superliga' : wp && wp <= 2500 ? 'Hyperliga' : 'Meisterliga';
     return '<div class="adv ok"><b>PvP-Pokémon</b> <span class="muted">(passt mit ' + (wp ? fmt(wp) + ' WP' : 'unbekannten WP') + ' in die ' + fit + '; Attacken laut PvPoke-Meta)</span>' + rows.join('') + '</div>' +
@@ -1261,26 +1259,33 @@
   const memberFromMon = m => { const sp = spOf(m), mvs = [m.fast, m.c1, m.c2].filter(Boolean); const pv = pvIdOf(m), me = metaOf(curFmt().key).find(x => x.id === pv);
     const wpv = Number(m.wp) || (statsOf(m).l ? statsOf(m).cp : 0);
     const info = [ivPct(m) !== null ? ivPct(m) + '% (' + m.iv.join('/') + ')' : '', wpv ? fmt(wpv) + ' WP' : '', mvs.length ? mvs.map(id => mv(id).n).join(' / ') : ''].filter(Boolean).join(' · ');
-    const rd = pvReady(m, me, curFmt().cp, wpv);
-    return { key: 'm' + m.uid, label: sp.de + (m.crypto ? ' (Crypto)' : '') + (m.shiny ? ' ✨' : '') + (wpv ? ' ' + fmt(wpv) + ' WP' : '') + (ivPct(m) !== null ? ' ' + ivPct(m) + '%' : ''), info: info + (rd.note ? ' · ' + rd.note : ''), rd: rd.q, sp, t: sp.t, pv, m, mt: mvs.length ? mvs.map(id => mv(id).t) : me ? me.ms.map(id => pvMove(id)[1]) : sp.t }; };
-  // Wie PvP-bereit ist ein eigenes Pokémon: Attacken laut Meta (vor allem die Sofortattacke), IVs für die Liga, ausgebaut
-  function pvReady(m, me, cap, wpv) {
-    let mvq = 0.6, note = '', fPen = 1;
-    if (me && me.ms.length) {
-      const have = [m.fast, m.c1, m.c2].filter(Boolean);
-      if (!have.length) { mvq = 0.45; note = 'Attacken nicht eingetragen'; }
-      else {
-        const f = pvFast(me.ms[0]), cs = me.ms.slice(1).map(pvCharged).filter(Boolean);
-        const fOk = !f || m.fast === f, cOk = cs.filter(c => have.includes(c)).length;
-        mvq = (fOk ? 0.6 : 0.1) + 0.4 * (cs.length ? cOk / cs.length : 1);
-        if (!fOk) { note = 'Sofortattacke ' + mv(f).n + ' fehlt'; fPen = 0.6; }
-        else if (cOk < cs.length) note = 'Lade-Attacke fehlt: ' + cs.filter(c => !have.includes(c)).map(c => mv(c).n).join(', ');
-      }
+    const ps = pvStatus(m, curFmt()), rd = { q: ps.ok ? 1 : 0.2, note: ps.ok ? 'PvP-fertig ✓' : ps.issues.join(' · ') };
+    return { key: 'm' + m.uid, label: sp.de + (m.crypto ? ' (Crypto)' : '') + (m.shiny ? ' ✨' : '') + (wpv ? ' ' + fmt(wpv) + ' WP' : '') + (ivPct(m) !== null ? ' ' + ivPct(m) + '%' : ''), info: info + (rd.note ? ' · ' + rd.note : ''), rd: rd.q, ps, sp, t: sp.t, pv, m, mt: mvs.length ? mvs.map(id => mv(id).t) : me ? me.ms.map(id => pvMove(id)[1]) : sp.t }; };
+  // PvP-Status eines eigenen Pokémon in einer Liga. Score = PvPoke-Wert der Art in dieser Liga.
+  // Fertig nur, wenn: Attacken wie von PvPoke empfohlen (Sofortattacke + beide Lade-Attacken),
+  // IVs: Meisterliga mind. 42/45 und Angriff ab 13, sonst IV-Rang in den Top 10 % (Rang ≤ 410 von 4096),
+  // WP/Level: Meisterliga ab Level 49, sonst höchstens Liga-Limit und mind. 97 % davon.
+  const PV_TOP = 410;
+  function pvStatus(m, f) {
+    const cap = f.cp, meta = metaOf(f.key), pv = pvIdOf(m), i = meta.findIndex(x => x.id === pv), e = meta[i];
+    const issues = [], st = statsOf(m), wpv = Number(m.wp) || (st.l ? st.cp : 0);
+    if (!e) issues.push('nicht unter den Top 300 dieser Liga');
+    else {
+      const f0 = pvFast(e.ms[0]), cs = e.ms.slice(1).map(pvCharged).filter(Boolean), have = [m.c1, m.c2].filter(Boolean);
+      if (f0 && m.fast !== f0) issues.push('Sofortattacke ' + mv(f0).n + ' fehlt' + (m.fast ? ' (hat ' + mv(m.fast).n + ')' : ''));
+      const miss = cs.filter(c => !have.includes(c));
+      if (miss.length) issues.push('Lade-Attacke fehlt: ' + miss.map(c => mv(c).n).join(', '));
+      if (cs.length > 1 && have.length < 2 && !miss.length) issues.push('zweite Lade-Attacke fehlt');
     }
-    let ivq = 0.7;
-    if (hasIV(m)) { if (cap >= 10000) ivq = ivPct(m) / 100; else { const r = myRank(m, cap); ivq = r ? Math.max(0, r.pct / 100) : 0.7; } }
-    const lvq = !wpv ? 0.6 : cap >= 10000 ? Math.min(1, (statsOf(m).l || 30) / 50) : Math.min(1, wpv / cap);
-    return { q: (mvq * 0.55 + ivq * 0.25 + lvq * 0.2) * fPen, note };
+    let ivTxt = '';
+    if (!hasIV(m)) issues.push('IVs fehlen');
+    else if (cap >= 10000) { const iv = ivs(m), sum = iv[0] + iv[1] + iv[2]; ivTxt = iv.join('/'); if (sum < 42 || iv[0] < 13) issues.push('IVs zu niedrig für die Meisterliga (' + ivTxt + ')'); }
+    else { const r = myRank(m, cap); if (r) { ivTxt = 'IV-Rang ' + r.rank; if (r.rank > PV_TOP) issues.push('IV-Rang ' + r.rank + ', nicht in den Top 10 %'); } }
+    if (cap >= 10000) { const l = st.l || 0; if (l < 49) issues.push(l ? 'erst Level ' + String(l).replace('.', ',') + ', sollte 50 sein' : 'Level/WP fehlt'); }
+    else if (!wpv) issues.push('WP fehlen');
+    else if (wpv > cap) issues.push(fmt(wpv) + ' WP, über dem Limit');
+    else if (wpv < cap * 0.97) issues.push('erst ' + fmt(wpv) + ' WP, sollte nah an ' + fmt(cap) + ' sein');
+    return { ok: !issues.length, score: e ? e.s : 0, rank: i + 1, issues, ivTxt };
   }
   const memberFromMeta = x => { const r = pvSp(x.id); if (!r) return null; return { key: 'p' + x.id, label: r.sp.de + (r.shadow ? ' (Crypto)' : '') + ' – hast du nicht', sp: r.sp, t: r.sp.t, pv: x.id, mt: x.ms.map(id => pvMove(id)[1]), meta: x }; };
   const threatOf = x => { const r = pvSp(x.id); return r ? { id: x.id, sp: r.sp, shadow: r.shadow, t: r.sp.t, mt: x.ms.map(id => pvMove(id)[1]), s: x.s } : null; };
@@ -1292,7 +1297,7 @@
   // Bewertung: Abdeckung der Top-Meta, besonders der Konter der festen Mitglieder (laut PvPoke), Abzug für gemeinsame Schwächen, Stärke der Partner in der Meta.
   function suggestTeams(fixed, pool, l, threats, k) {
     const meta = metaOf(l), idx = {}; meta.forEach((x, i) => { idx[x.id] = i; });
-    const quality = c => { const i = idx[c.pv], base = i === undefined ? 0.4 : Math.max(0.5, meta[i].s / 100) * (i < 60 ? 1 : i < 150 ? 0.92 : 0.82); return base * (c.m ? 0.35 + 0.65 * (c.rd ?? 0.6) : 0.7); };
+    const quality = c => { const i = idx[c.pv]; return i === undefined ? 0.3 : meta[i].s / 100; };
     // Konter der festen Mitglieder zusätzlich als Gegner aufnehmen und stärker gewichten
     const ths = threats.slice(), W = ths.map(th => th.s / 100);
     fixed.forEach(f => { const e = meta[idx[f.pv]]; (e ? e.lo : []).forEach(id => {
@@ -1355,21 +1360,22 @@
     }).join('');
     // Deine für diese Liga
     const mineL = state.mons.filter(m => eligible(m, cap)).map(m => { const id = pvIdOf(m), pos = meta.findIndex(x => x.id === id); return { m, pos: pos < 0 ? 9999 : pos + 1, r: myRank(m, cap), x: meta[pos] }; })
-      .filter(o => o.pos <= 150).sort((a, b) => a.pos - b.pos);
+      .filter(o => o.pos <= 150).map(o => Object.assign(o, { ps: pvStatus(o.m, f) })).sort((a, b) => (b.ps.ok - a.ps.ok) || a.pos - b.pos);
     const mineRows = mineL.map(o => {
       const sp = spOf(o.m), rec = o.x ? o.x.ms.map(id => pvMove(id)) : [];
       const have = [o.m.fast, o.m.c1, o.m.c2].filter(Boolean).map(id => mv(id).n);
       const missing = rec.filter(v => !have.includes(v[0])).map(v => v[0]);
-      return '<div class="rk" data-detail="' + o.m.uid + '"><span class="rk-n">#' + o.pos + '</span>' + img(sp, 'spr', o.m.shiny) + '<div class="grow"><b>' + spName(sp) + ' ' + monTags(o.m) + '</b>' +
+      return '<div class="rk' + (o.ps.ok ? ' own' : ' notready') + '" data-detail="' + o.m.uid + '"><span class="rk-n">#' + o.pos + '</span>' + img(sp, 'spr', o.m.shiny) + '<div class="grow"><b>' + spName(sp) + ' ' + monTags(o.m) + '</b> <span class="rdy ' + (o.ps.ok ? 'ok' : 'low') + '">' + (o.ps.ok ? '✓ fertig · ' : '') + 'Score ' + o.ps.score.toFixed(1) + '</span>' +
+        (o.ps.ok ? '' : '<div class="sub up2">Noch nicht fertig: ' + o.ps.issues.map(esc).join(' · ') + '</div>') +
         '<div class="sub">' + (o.r ? 'IV-Rang <b>' + o.r.rank + '</b>/4096 (' + o.r.pct.toFixed(1) + '%) · bestes Level ' + String(o.r.l).replace('.', ',') + ' = ' + fmt(o.r.cp) + ' WP' : 'IVs eintragen für den IV-Rang') + '</div>' +
-        (missing.length && have.length ? '<div class="sub up2">Empfohlen fehlt: ' + missing.map(esc).join(', ') + '</div>' : !have.length ? '<div class="sub">Empfohlen: ' + rec.map(v => esc(v[0])).join(' / ') + '</div>' : '') + '</div></div>';
+        (!o.ps.ok ? '<div class="sub">Empfohlen: ' + rec.map(v => esc(v[0])).join(' / ') + '</div>' : '') + '</div></div>';
     }).join('');
     // Team-Bauer
     const threats = meta.slice(0, 40).map(threatOf).filter(Boolean);
     const myAll = state.mons.filter(m => eligible(m, cap)).map(memberFromMon);
     // pro Art nur das PvP-bereiteste Exemplar vorschlagen (die anderen bleiben in den Slots auswählbar)
-    const bestOf = {}; myAll.forEach(c => { const k = c.pv || c.sp.k; if (!bestOf[k] || c.rd > bestOf[k].rd) bestOf[k] = c; });
-    const myPool = myAll.slice().sort((a, b) => b.rd - a.rd), mySugg = Object.values(bestOf);
+    const bestOf = {}; myAll.filter(c => c.ps.ok).forEach(c => { const k = c.pv || c.sp.k; if (!bestOf[k] || c.ps.score > bestOf[k].ps.score) bestOf[k] = c; });
+    const myPool = myAll.slice().sort((a, b) => (b.ps.ok - a.ps.ok) || (b.ps.score - a.ps.score)), mySugg = Object.values(bestOf);
     const metaPool = meta.slice(0, 60).map(memberFromMeta).filter(Boolean).filter(c => !myPool.some(p => p.pv === c.pv));
     const pool = state.ui.pvOnlyMine === false ? mySugg.concat(metaPool) : mySugg;
     const all = myPool.concat(metaPool), byKey = {}; all.forEach(c => { byKey[c.key] = c; });
@@ -1386,17 +1392,17 @@
     if (pvPick !== null) {
       const q = (state.ui.pvSearch || '').toLowerCase(), showMeta = !!state.ui.pvPickMeta;
       const cand = myPool.concat(showMeta ? metaPool : []).filter(c => !q || c.sp.de.toLowerCase().includes(q) || c.sp.en.toLowerCase().includes(q))
-        .map(c => ({ c, r: metaIdx[c.pv] || 999 })).sort((a, b) => ((b.c.rd ?? 0.5) * (b.r < 999 ? 1 : 0.6)) - ((a.c.rd ?? 0.5) * (a.r < 999 ? 1 : 0.6)) || a.r - b.r).slice(0, 80);
+        .map(c => ({ c, r: metaIdx[c.pv] || 999 })).sort((a, b) => ((b.c.ps ? b.c.ps.ok : 0) - (a.c.ps ? a.c.ps.ok : 0)) || a.r - b.r).slice(0, 80);
       pickHtml = '<div class="panel wide pvpick"><div class="boss-pick"><b>Slot ' + (pvPick + 1) + ' wählen</b><input type="search" id="pvSearch" placeholder="Name suchen …" value="' + esc(state.ui.pvSearch || '') + '"><label class="toggle small2"><input type="checkbox" data-pvpickmeta' + (showMeta ? ' checked' : '') + '> auch Meta-Pokémon, die ich nicht habe</label><button class="btn mini" data-pvclose="1">Schließen</button></div>' +
         '<div class="pvcands">' + cand.map(({ c, r }) => {
-          const rd = c.m ? Math.round((c.rd || 0) * 100) : null, lvl = rd === null ? '' : rd >= 80 ? 'ok' : rd >= 60 ? 'mid' : 'low';
+          const sc = c.m ? c.ps : null, lvl = !sc ? '' : sc.ok ? 'ok' : 'low';
           return '<div class="pvcand" data-pvchoose="' + c.key + '">' + img(c.sp, 'mini', c.m && c.m.shiny) + '<div class="grow"><b>' + esc(c.sp.de) + (c.sp.f ? ' <span class="form">' + esc(c.sp.f) + '</span>' : '') + (c.m && c.m.crypto ? ' <span class="mt cr">Crypto</span>' : '') + '</b>' +
-            '<div class="sub">' + (r < 999 ? 'Meta #' + r + ' · ' : 'nicht in der Meta · ') + esc(c.m ? c.info : 'hast du nicht') + '</div></div>' + (rd !== null ? '<span class="rdy ' + lvl + '" title="PvP-bereit: Attacken, IVs, Level">' + rd + '%</span>' : '') + '</div>';
+            '<div class="sub">' + (r < 999 ? 'Meta #' + r + ' · ' : 'nicht in der Meta · ') + esc(c.m ? c.info : 'hast du nicht') + '</div></div>' + (sc ? '<span class="rdy ' + lvl + '" title="PvPoke-Score der Art in dieser Liga">' + (sc.ok ? '✓ ' : '') + sc.score.toFixed(1) + '</span>' : c.meta ? '<span class="rdy mid">' + c.meta.s.toFixed(1) + '</span>' : '') + '</div>';
         }).join('') + '</div></div>';
     }
     const teamHtml = '<div class="panel wide"><div class="pvslots">' + [0, 1, 2].map(slotCard).join('') + '</div>' +
       '<div class="boss-pick"><button class="btn mini" data-build="1">✨ Vorschläge für die leeren Slots</button><label class="toggle small2"><input type="checkbox" data-pvmine' + (state.ui.pvOnlyMine === false ? '' : ' checked') + '> nur meine Pokémon vorschlagen</label><button class="btn mini" data-clearteam="1">Leeren</button></div></div>' + pickHtml +
-      (pvSugg && pvSugg.l === l ? '<div class="panel wide sugg"><b>Vorschläge</b> <span class="muted small2">(fest: ' + pvSugg.fixed.map(esc).join(', ') + ')</span>' + pvSugg.list.map((o, i) => {
+      (pvSugg && pvSugg.l === l ? '<div class="panel wide sugg"><b>Vorschläge</b> <span class="muted small2">(fest: ' + pvSugg.fixed.map(esc).join(', ') + ' · aus ' + pvSugg.nReady + ' fertigen Pokémon)</span>' + (pvSugg.list.length ? '' : '<div class="empty">Zu wenige fertige Pokémon für diese Liga. Schau unten bei „Deine für die …“, was jeweils noch fehlt.</div>') + pvSugg.list.map((o, i) => {
         const ev2 = teamEval(o.team, l, threats), cov = ev2.filter(r => r.best >= 1.15).length, hol = ev2.filter(r => r.best < 0.88).map(r => r.th.sp.de);
         return '<div class="srow2"><span class="rk-n">' + (i + 1) + '</span>' + o.team.map(c => memberChip(c, pvSugg.fixed.includes(c.label))).join('') +
           '<span class="muted small2"> · deckt ' + cov + '/' + threats.length + (hol.length ? ' · Lücken: ' + hol.slice(0, 4).map(esc).join(', ') : '') + '</span><button class="btn mini" data-usesugg="' + i + '">übernehmen</button></div>';
@@ -1408,7 +1414,7 @@
         '<div class="muted small">✓ gewinnt meist · ≈ offen · ✗ verliert meist. Aus den Top-Siegen/-Niederlagen von PvPoke, sonst nach Typen geschätzt (keine echte Kampf-Simulation).</div>' : '<div class="empty">Wähl ein Pokémon in Slot 1 und klick „Team um Slot 1 bauen“, oder stell alle drei selbst zusammen.</div>');
     window.__pvBuild = () => {
       const fixed = team.filter(Boolean); if (!fixed.length || fixed.length >= 3) { pvSugg = null; renderPvp(); return; }
-      pvSugg = { l, fixed: fixed.map(c => c.label), list: suggestTeams(fixed, pool, l, threats, 5) }; renderPvp();
+      pvSugg = { l, fixed: fixed.map(c => c.label), list: suggestTeams(fixed, pool, l, threats, 5), nReady: mySugg.length }; renderPvp();
     };
     window.__pvUse = i => { const o = pvSugg && pvSugg.list[i]; if (!o) return; state.ui.team[l] = o.team.map(c => c.key); pvSugg = null; save(); renderPvp(); };
     out.innerHTML = (f.cup !== 'all' ? '<div class="adv ' + (isLive(f) ? 'ok' : 'muted2') + '"><b>' + esc(f.title) + '</b> · ' + (cap >= 10000 ? 'ohne WP-Limit' : 'bis ' + cap + ' WP') + (isLive(f) ? ' · 🟢 gerade in der GO-Kampfliga' : '') + (f.rules && f.rules.length ? '<div class="sub">Regeln (PvPoke, englisch): ' + f.rules.map(esc).join(' · ') + '</div>' : '') + '</div>' : '') +
