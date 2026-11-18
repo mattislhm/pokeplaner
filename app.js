@@ -1394,7 +1394,12 @@
     }).join('');
     // Deine für diese Liga
     const mineL = state.mons.filter(m => eligible(m, cap)).map(m => { const id = pvIdOf(m), pos = meta.findIndex(x => x.id === id); return { m, pos: pos < 0 ? 9999 : pos + 1, r: myRank(m, cap), x: meta[pos] }; })
-      .filter(o => o.pos <= 150).map(o => Object.assign(o, { ps: pvStatus(o.m, f) })).sort((a, b) => (b.ps.ok - a.ps.ok) || a.pos - b.pos);
+      .filter(o => o.pos <= 150).map(o => Object.assign(o, { ps: pvStatus(o.m, f) }))
+      // pro Art nur das beste Exemplar: erst fertig, dann weniger offene Punkte, dann besserer IV-Rang
+      .reduce((acc, o) => { const id = pvIdOf(o.m), cur = acc.find(x => pvIdOf(x.m) === id);
+        const better = (a, b) => (a.ps.ok - b.ps.ok) || (b.ps.issues.length - a.ps.issues.length) || (((b.r || {}).rank || 9999) - ((a.r || {}).rank || 9999));
+        if (!cur) acc.push(o); else if (better(o, cur) > 0) acc[acc.indexOf(cur)] = o; return acc; }, [])
+      .sort((a, b) => (b.ps.ok - a.ps.ok) || a.pos - b.pos);
     const mineRows = mineL.map(o => {
       const sp = spOf(o.m), rec = o.x ? o.x.ms.map(id => pvMove(id)) : [];
       const have = [o.m.fast, o.m.c1, o.m.c2].filter(Boolean).map(id => mv(id).n);
@@ -1443,7 +1448,10 @@
     let pickHtml = '';
     if (pvPick !== null) {
       const q = (state.ui.pvSearch || '').toLowerCase(), showMeta = !!state.ui.pvPickMeta;
-      const cand = myPool.concat(showMeta ? metaPool : []).filter(c => !q || c.sp.de.toLowerCase().includes(q) || c.sp.en.toLowerCase().includes(q))
+      const bestMine = {}; myPool.forEach(c => { const k = c.pv || c.sp.k, cur = bestMine[k];
+        const sc = x => (x.ps.ok ? 1e6 : 0) - x.ps.issues.length * 1e4 - ((myRank(x.m, f.cp) || {}).rank || 9999);
+        if (!cur || sc(c) > sc(cur)) bestMine[k] = c; });
+      const cand = Object.values(bestMine).concat(showMeta ? metaPool : []).filter(c => !q || c.sp.de.toLowerCase().includes(q) || c.sp.en.toLowerCase().includes(q))
         .map(c => ({ c, r: metaIdx[c.pv] || 999 })).sort((a, b) => ((b.c.ps ? b.c.ps.ok : 0) - (a.c.ps ? a.c.ps.ok : 0)) || a.r - b.r).slice(0, 80);
       pickHtml = '<div class="panel wide pvpick"><div class="boss-pick"><b>Slot ' + (pvPick + 1) + ' wählen</b><input type="search" id="pvSearch" placeholder="Name suchen …" value="' + esc(state.ui.pvSearch || '') + '"><label class="toggle small2"><input type="checkbox" data-pvpickmeta' + (showMeta ? ' checked' : '') + '> auch Meta-Pokémon, die ich nicht habe</label><button class="btn mini" data-pvclose="1">Schließen</button></div>' +
         '<div class="pvcands">' + cand.map(({ c, r }) => {
