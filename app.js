@@ -1289,9 +1289,10 @@
       // eine fehlende Lade-Attacke mit über 30 % Nutzung zählt nur, wenn deine Ersatz-Attacke weniger als halb so oft genutzt wird
       const toPv = id => id ? id.replace(/_FAST$/, '').replace(/^FUTURESIGHT$/, 'FUTURE_SIGHT') : '';
       const fu = e.fu || {}, cu = e.cu || {}, f0 = pvFast(e.ms[0]), cs = e.ms.slice(1).map(pvCharged).filter(Boolean), have = [m.c1, m.c2].filter(Boolean);
+      const f0n = f0 ? mv(f0).n : pvName(e.ms[0], true);
       const topF = Math.max(0, ...Object.values(fu)), myF = fu[toPv(m.fast)] || 0;
-      if (!m.fast) issues.push('Sofortattacke fehlt (' + mv(f0).n + ')');
-      else if (e.fu ? myF < topF * 0.5 : m.fast !== f0) issues.push('Sofortattacke ' + mv(f0).n + ' fehlt (hat ' + mv(m.fast).n + ')');
+      if (!m.fast) issues.push('Sofortattacke fehlt (' + f0n + ')');
+      else if (e.fu ? myF < topF * 0.5 : m.fast !== f0) issues.push('Sofortattacke ' + f0n + ' fehlt (hat ' + ((mv(m.fast) || {}).n || m.fast) + ')');
       if (have.length < 2) issues.push(have.length ? 'zweite Lade-Attacke fehlt' : 'Lade-Attacken fehlen');
       else {
         const myC = have.map(c => cu[toPv(c)] || 0), alt = Math.min(...myC);
@@ -1357,6 +1358,9 @@
   const memberChip = (c, dim) => c.m ? '<span class="tmem' + (dim ? ' dim' : '') + '" data-detail="' + c.m.uid + '" title="Öffnen">' + img(c.sp, 'mini', c.m.shiny) + '<span><b>' + esc(c.sp.de) + (c.m.crypto ? ' <small>Crypto</small>' : '') + '</b><small>' + esc(c.info || '') + '</small></span></span>'
     : '<span class="tmem' + (dim ? ' dim' : '') + '">' + img(c.sp, 'mini') + '<span><b>' + esc(c.sp.de) + '</b><small>hast du nicht</small></span></span>';
   function renderPvp() {
+    try { renderPvpInner(); } catch (err) { console.error(err); const out = $('#pvpOut'); if (out) out.innerHTML = '<div class="adv up">⚠ Fehler beim Anzeigen: ' + esc(String(err && err.message || err)) + '</div>'; }
+  }
+  function renderPvpInner() {
     loadPvp(); loadEvents();
     const f = curFmt(), l = f.key, cap = f.cp, out = $('#pvpOut');
     document.querySelectorAll('[data-league]').forEach(b => b.classList.toggle('on', b.dataset.league === l));
