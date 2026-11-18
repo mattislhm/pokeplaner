@@ -1275,7 +1275,7 @@
     return { key: 'm' + m.uid, label: sp.de + (m.crypto ? ' (Crypto)' : '') + (m.shiny ? ' ✨' : '') + (wpv ? ' ' + fmt(wpv) + ' WP' : '') + (ivPct(m) !== null ? ' ' + ivPct(m) + '%' : ''), info: info + (rd.note ? ' · ' + rd.note : ''), rd: rd.q, ps, sp, t: sp.t, pv, m, mt: mvs.length ? mvs.map(id => mv(id).t) : me ? me.ms.map(id => pvMove(id)[1]) : sp.t }; };
   // PvP-Status eines eigenen Pokémon in einer Liga. Score = PvPoke-Wert der Art in dieser Liga.
   // Fertig nur, wenn: Attacken wie von PvPoke empfohlen (Sofortattacke + beide Lade-Attacken),
-  // IVs: Meisterliga mind. 39/45 und Angriff ab 13, sonst IV-Rang in den Top 10 % (Rang ≤ 410 von 4096),
+  // IVs: in jeder Liga IV-Rang (Werteprodukt wie bei PvPoke) in den Top 10 % (Rang ≤ 410 von 4096),
   // WP/Level: Meisterliga ab Level 49, sonst höchstens Liga-Limit und mind. 97 % davon.
   const PV_TOP = 410;
   function pvStatus(m, f) {
@@ -1298,8 +1298,7 @@
     }
     let ivTxt = '';
     if (!hasIV(m)) issues.push('IVs fehlen');
-    else if (cap >= 10000) { const iv = ivs(m), sum = iv[0] + iv[1] + iv[2]; ivTxt = iv.join('/'); if (sum < 39 || iv[0] < 13) issues.push('IVs zu niedrig für die Meisterliga (' + ivTxt + ')'); }
-    else { const r = myRank(m, cap); if (r) { ivTxt = 'IV-Rang ' + r.rank; if (r.rank > PV_TOP) issues.push('IV-Rang ' + r.rank + ', nicht in den Top 10 %'); } }
+    else { const r = myRank(m, cap); if (r) { ivTxt = 'IV-Rang ' + r.rank; if (r.rank > PV_TOP) issues.push('IV-Rang ' + r.rank + ' von 4096, nicht in den Top 10 %'); } }
     if (cap >= 10000) { const l = st.l || 0; if (l < 49) issues.push(l ? 'erst Level ' + String(l).replace('.', ',') + ', sollte 50 sein' : 'Level/WP fehlt'); }
     else if (!wpv) issues.push('WP fehlen');
     else if (wpv > cap) issues.push(fmt(wpv) + ' WP, über dem Limit');
