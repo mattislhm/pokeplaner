@@ -1681,7 +1681,7 @@
       if (hit) { e.dex.forEach(d => { if (!hit.dex.includes(d)) hit.dex.push(d); }); return; }
       // schon von Hand eingetragen (gleiche Pokémon, gleiches Jahr)? dann nicht doppelt
       if (base.some(b => b.id.startsWith('x-') && yr(b) === e.y && e.dex.every(d => b.dex.includes(d)))) return;
-      base.push({ id: 'bp-' + i + '-' + t.join('-').slice(0, 40), n: e.n + ' (Bulbapedia)', d: e.y ? new Date(e.y + '-07-01').getTime() : 0, dex: e.dex.slice(), img: '' });
+      base.push({ id: 'bp-' + i + '-' + t.join('-').slice(0, 40), n: e.n, d: e.y ? new Date(e.y + '-07-01').getTime() : 0, dex: e.dex.slice(), img: '' });
     });
     bgMergedKey = key; return (bgMerged = base);
   }
