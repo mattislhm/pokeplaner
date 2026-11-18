@@ -755,13 +755,13 @@
     dbBest.sort((a, b) => b.b.er - a.b.er);
     const topDB = dbBest.slice(0, 15), refDB = topDB[0] ? topDB[0].b.er : 1;
     let html = bossHead(ctx);
-    html += '<h2 class="sub">Dein bestes Team (6)</h2>' + (mega ? '<div class="adv ok">Mega im Team: ' + vName(mega.v) + (mega.m.mega ? ' (Level ' + (mega.m.mlv || 1) + ')' : ' <span class="muted">(ob du es freigeschaltet hast, kannst du beim Pokémon einstellen)</span>') + (mega.plus ? ', nutzt auch ' + esc(mv(mega.plus).n) : '') + ', gibt allen anderen +30% auf ' + mega.v.t.join('/') + '-Attacken und +10% auf alles andere.</div>' : '') +
+    html += '<h2 class="sub">Dein bestes Team (6)</h2><div class="muted small">Reihenfolge nach Schaden und Ausdauer zusammen, nicht nur DPS.</div>' + (mega ? '<div class="adv ok">Mega im Team: ' + vName(mega.v) + (mega.m.mega ? ' (Level ' + (mega.m.mlv || 1) + ')' : ' <span class="muted">(ob du es freigeschaltet hast, kannst du beim Pokémon einstellen)</span>') + (mega.plus ? ', nutzt auch ' + esc(mv(mega.plus).n) : '') + ', gibt allen anderen +30% auf ' + mega.v.t.join('/') + '-Attacken und +10% auf alles andere.</div>' : '') +
       (team.length ? '<div class="rank">' + team.map((x, i) => {
         const better = x.best && x.best.er > x.r.er * 1.05 ? '<div class="sub up2">Besser hier: ' + esc(mv(x.best.f).n) + kindTag(x.v.sp, x.best.f) + ' / ' + esc(mv(x.best.c).n) + kindTag(x.v.sp, x.best.c) + ' (+' + Math.round((x.best.er / x.r.er - 1) * 100) + '%)</div>' : '';
         return '<div class="rk" data-detail="' + x.m.uid + '"><span class="rk-n">' + (i + 1) + '</span>' + imgId(x.v.img, 'spr', x.m.shiny) + '<div class="grow"><b>' + modeBadge(x.m.mode) + vName(x.v) + ' ' + monTags(x.m) + '</b><div class="sub">' + esc(mv(x.f).n) + ' / ' + esc(mv(x.r.c).n) + (x.m.fast && x.m.c1 ? '' : ' <span class="warn">(Attacken nicht eingetragen)</span>') + '</div>' + better + '</div>' +
-          '<span class="dmg">DPS ' + x.r.dps.toFixed(1) + '</span><div class="bar"><i style="width:' + Math.round(x.r.er / ref * 100) + '%"></i></div></div>';
+          '<span class="dmg" title="Sortiert nach DPS und Ausdauer (TDO) zusammen">DPS ' + x.r.dps.toFixed(1) + '<small class="muted"> · TDO ' + Math.round(x.r.tdo) + '</small></span><div class="bar"><i style="width:' + Math.round(x.r.er / ref * 100) + '%"></i></div></div>';
       }).join('') + '</div>' : '<div class="empty">Noch keine Pokémon eingetragen.</div>');
-    html += '<h2 class="sub">Die Besten aus der Datenbank (Lv 40, 15/15/15)</h2><div class="rank">' + topDB.map((x, i) => '<div class="rk"><span class="rk-n">' + (i + 1) + '</span>' + imgId(x.v.img) + '<div class="grow"><b>' + vName(x.v) + (x.crypto ? ' <span class="mt cr">Crypto</span>' : '') + '</b><div class="sub">' + esc(mv(x.b.f).n) + kindTag(x.v.sp, x.b.f) + ' / ' + esc(mv(x.b.c).n) + kindTag(x.v.sp, x.b.c) + '</div></div><span class="dmg">DPS ' + x.b.dps.toFixed(1) + '</span><div class="bar"><i style="width:' + Math.round(x.b.er / refDB * 100) + '%"></i></div><button class="add" data-add="' + x.v.sp.k + '" data-mode="n" data-crypto="' + (x.crypto ? 1 : '') + '" title="Hab ich">＋</button></div>').join('') + '</div>';
+    html += '<h2 class="sub">Die Besten aus der Datenbank (Lv 40, 15/15/15)</h2><div class="rank">' + topDB.map((x, i) => '<div class="rk"><span class="rk-n">' + (i + 1) + '</span>' + imgId(x.v.img) + '<div class="grow"><b>' + vName(x.v) + (x.crypto ? ' <span class="mt cr">Crypto</span>' : '') + '</b><div class="sub">' + esc(mv(x.b.f).n) + kindTag(x.v.sp, x.b.f) + ' / ' + esc(mv(x.b.c).n) + kindTag(x.v.sp, x.b.c) + '</div></div><span class="dmg" title="Sortiert nach DPS und Ausdauer (TDO) zusammen">DPS ' + x.b.dps.toFixed(1) + '<small class="muted"> · TDO ' + Math.round(x.b.tdo) + '</small></span><div class="bar"><i style="width:' + Math.round(x.b.er / refDB * 100) + '%"></i></div><button class="add" data-add="' + x.v.sp.k + '" data-mode="n" data-crypto="' + (x.crypto ? 1 : '') + '" title="Hab ich">＋</button></div>').join('') + '</div>';
     const weak = weakTo(ctx.boss.t).slice(0, 4).map(TYPKEY);
     if (weak.length) html += '<h2 class="sub">Suchtexte fürs Spiel</h2>' + (team.length ? searchBox('Dein Team aus der Box', dexList(team.map(x => x.v.sp.dex)) + (team.some(x => x.m.crypto) ? '' : '&!crypto'), 'Pokédex-Nummern deiner 6. Bei mehreren gleichen nimm das mit dem höchsten WP.') : '') +
       searchBox('Alle Konter mit passenden Attacken', weak.map(t => '@1' + t).join(',') + '&' + weak.map(t => '@2' + t + ',@3' + t).join(','), 'Schnell-Attacke UND eine Lade-Attacke vom Typ ' + weak.join('/') + '.');
@@ -820,7 +820,7 @@
     });
     const list = rows.sort((a, b) => b.b.er - a.b.er).slice(0, 30), top = list[0] ? list[0].b.er : 1;
     const own = new Set(state.mons.map(m => m.k + (m.crypto ? '|c' : '')));
-    $('#rrankList').innerHTML = '<div class="rank">' + list.map((x, i) => '<div class="rk' + (own.has(x.v.sp.k + (x.crypto ? '|c' : '')) ? ' own' : '') + '"><span class="rk-n">' + (i + 1) + '</span>' + imgId(x.v.img) + '<div class="grow"><b>' + vName(x.v) + (x.crypto ? ' <span class="mt cr">Crypto</span>' : '') + '</b><div class="sub">' + esc(mv(x.b.f).n) + kindTag(x.v.sp, x.b.f) + ' / ' + esc(mv(x.b.c).n) + kindTag(x.v.sp, x.b.c) + '</div></div><span class="dmg">DPS ' + x.b.dps.toFixed(1) + '</span><div class="bar"><i style="width:' + Math.round(x.b.er / top * 100) + '%"></i></div><button class="add" data-add="' + x.v.sp.k + '" data-mode="n" data-crypto="' + (x.crypto ? 1 : '') + '">＋</button></div>').join('') + '</div>';
+    $('#rrankList').innerHTML = '<div class="rank">' + list.map((x, i) => '<div class="rk' + (own.has(x.v.sp.k + (x.crypto ? '|c' : '')) ? ' own' : '') + '"><span class="rk-n">' + (i + 1) + '</span>' + imgId(x.v.img) + '<div class="grow"><b>' + vName(x.v) + (x.crypto ? ' <span class="mt cr">Crypto</span>' : '') + '</b><div class="sub">' + esc(mv(x.b.f).n) + kindTag(x.v.sp, x.b.f) + ' / ' + esc(mv(x.b.c).n) + kindTag(x.v.sp, x.b.c) + '</div></div><span class="dmg" title="Sortiert nach DPS und Ausdauer (TDO) zusammen">DPS ' + x.b.dps.toFixed(1) + '<small class="muted"> · TDO ' + Math.round(x.b.tdo) + '</small></span><div class="bar"><i style="width:' + Math.round(x.b.er / top * 100) + '%"></i></div><button class="add" data-add="' + x.v.sp.k + '" data-mode="n" data-crypto="' + (x.crypto ? 1 : '') + '">＋</button></div>').join('') + '</div>';
   }
 
   // ---------- Import (Poke Genie / Calcy IV / CSV) ----------
@@ -1360,7 +1360,13 @@
     };
     const free = pool.filter(c => !fixed.some(f => f.sp.k === c.sp.k)).map(c => ({ c, r: row(c), q: quality(c) }));
     const res = [];
-    if (fixed.length >= 2) free.forEach(o => res.push({ sc: scoreRows(F.concat([o.r])) + o.q * qW, add: [o.c] }));
+    if (!fixed.length) {
+      const pre = free.map(o => Object.assign(o, { s1: scoreRows([o.r]) + o.q * qW })).sort((a, b) => b.s1 - a.s1).slice(0, 18);
+      pre.forEach((a, i) => pre.slice(i + 1).forEach((b, j) => pre.slice(i + j + 2).forEach(c => {
+        if (new Set([a.c.sp.k, b.c.sp.k, c.c.sp.k]).size < 3) return;
+        res.push({ sc: scoreRows([a.r, b.r, c.r]) + (a.q + b.q + c.q) * qW, add: [a.c, b.c, c.c] });
+      })));
+    } else if (fixed.length >= 2) free.forEach(o => res.push({ sc: scoreRows(F.concat([o.r])) + o.q * qW, add: [o.c] }));
     else {
       const pre = free.map(o => Object.assign(o, { s1: scoreRows(F.concat([o.r])) + o.q * qW })).sort((a, b) => b.s1 - a.s1).slice(0, 30);
       pre.forEach((a, i) => pre.slice(i + 1).forEach(b => { if (a.c.sp.k !== b.c.sp.k) res.push({ sc: scoreRows(F.concat([a.r, b.r])) + (a.q + b.q) * qW, add: [a.c, b.c] }); }));
@@ -1369,7 +1375,7 @@
     // Vielfalt: nicht fünfmal fast dasselbe Team
     const out = [], seen = {};
     res.forEach(r => { if (out.length >= k) return; const key = r.add.map(c => c.sp.k).join(); if (seen[key]) return; seen[key] = 1;
-      if (fixed.length < 2 && out.filter(o => o.add.some(c => r.add.some(d => d.sp.k === c.sp.k))).length >= 2) return; out.push(r); });
+      if (fixed.length < 2 && out.filter(o => o.add.some(c => r.add.some(d => d.sp.k === c.sp.k))).length >= (fixed.length ? 2 : 3)) return; out.push(r); });
     const top = out.length ? out[0].sc : 1;
     return out.map(r => ({ team: fixed.concat(r.add), pct: Math.round(r.sc / top * 100) }));
   }
@@ -1377,8 +1383,8 @@
   window.__pvTest = { pvStatus, myRank, buildAround, suggestTeams, metaOf, threatOf, memberFromMon, memberFromMeta, pvp: () => pvp };
   let pvSugg = null, pvPick = null;
   // Teammitglied anzeigen: bei eigenen Pokémon anklickbar (öffnet es in Meine Pokémon) mit WP, IVs und Attacken
-  const memberChip = (c, dim) => c.m ? '<span class="tmem' + (dim ? ' dim' : '') + '" data-detail="' + c.m.uid + '" title="Öffnen">' + img(c.sp, 'mini', c.m.shiny) + '<span><b>' + esc(c.sp.de) + (c.m.crypto ? ' <small>Crypto</small>' : '') + '</b><small>' + esc(c.info || '') + '</small></span></span>'
-    : '<span class="tmem' + (dim ? ' dim' : '') + '">' + img(c.sp, 'mini') + '<span><b>' + esc(c.sp.de) + '</b><small>hast du nicht</small></span></span>';
+  const memberChip = (c, dim) => c.m ? '<span class="tmem' + (dim ? ' dim' : '') + '" data-detail="' + c.m.uid + '" title="Öffnen">' + img(c.sp, 'mini', c.m.shiny) + '<span><b>' + spName(c.sp) + (c.m.crypto ? ' <small>Crypto</small>' : '') + '</b><small>' + esc(c.info || '') + '</small></span></span>'
+    : '<span class="tmem' + (dim ? ' dim' : '') + '">' + img(c.sp, 'mini') + '<span><b>' + spName(c.sp) + '</b><small>hast du nicht</small></span></span>';
   function renderPvp() {
     try { renderPvpInner(); } catch (err) { console.error(err); const out = $('#pvpOut'); if (out) out.innerHTML = '<div class="adv up">⚠ Fehler beim Anzeigen: ' + esc(String(err && err.message || err)) + '</div>'; }
   }
@@ -1475,18 +1481,18 @@
     }
     const teamHtml = '<div class="panel wide"><div class="pvslots">' + [0, 1, 2].map(slotCard).join('') + '</div>' +
       '<div class="boss-pick"><button class="btn mini" data-build="1">✨ Vorschläge für die leeren Slots</button><label class="toggle small2"><input type="checkbox" data-pvmine' + (state.ui.pvOnlyMine === false ? '' : ' checked') + '> nur meine Pokémon vorschlagen</label><button class="btn mini" data-clearteam="1">Leeren</button></div></div>' + pickHtml +
-      (pvSugg && pvSugg.l === l ? '<div class="panel wide sugg"><b>Vorschläge</b> <span class="muted small2">(fest: ' + pvSugg.fixed.map(esc).join(', ') + ' · aus ' + pvSugg.nReady + ' fertigen Pokémon)</span>' + (pvSugg.list.length ? '' : '<div class="empty">Zu wenige fertige Pokémon für diese Liga. Schau unten bei „Deine für die …“, was jeweils noch fehlt.</div>') + pvSugg.list.map((o, i) => {
-        const ev2 = teamEval(o.team, l, threats), cov = ev2.filter(r => r.best >= 1.15).length, hol = ev2.filter(r => r.best < 0.88).map(r => r.th.sp.de);
+      (pvSugg && pvSugg.l === l ? '<div class="panel wide sugg"><b>Vorschläge</b> <span class="muted small2">(' + (pvSugg.fixed.length ? 'fest: ' + pvSugg.fixed.map(esc).join(', ') + ' · ' : 'ganze Teams · ') + 'aus ' + pvSugg.nReady + ' fertigen Pokémon)</span>' + (pvSugg.list.length ? '' : '<div class="empty">Zu wenige fertige Pokémon für diese Liga. Schau unten bei „Deine für die …“, was jeweils noch fehlt.</div>') + pvSugg.list.map((o, i) => {
+        const ev2 = teamEval(o.team, l, threats), cov = ev2.filter(r => r.best >= 1.15).length, hol = ev2.filter(r => r.best < 0.88).map(r => r.th.sp.de + (r.th.sp.f ? " (" + r.th.sp.f + ")" : ""));
         return '<div class="srow2"><span class="rk-n">' + (i + 1) + '</span>' + o.team.map(c => memberChip(c, pvSugg.fixed.includes(c.label))).join('') +
           '<span class="muted small2"> · deckt ' + cov + '/' + threats.length + (hol.length ? ' · Lücken: ' + hol.slice(0, 4).map(esc).join(', ') : '') + '</span><button class="btn mini" data-usesugg="' + i + '">übernehmen</button></div>';
       }).join('') + '</div>' : '') +
-      (team.some(Boolean) ? '<div class="adv ' + (covered >= 14 ? 'ok' : 'up') + '">Gegen ' + covered + ' von ' + threats.length + ' Top-Meta-Pokémon hat dein Team einen klaren Konter.' + (holes.length ? ' Lücken: ' + holes.map(r => esc(r.th.sp.de)).join(', ') + '.' : '') + '</div>' +
+      (team.some(Boolean) ? '<div class="adv ' + (covered >= 14 ? 'ok' : 'up') + '">Gegen ' + covered + ' von ' + threats.length + ' Top-Meta-Pokémon hat dein Team einen klaren Konter.' + (holes.length ? ' Lücken: ' + holes.map(r => spName(r.th.sp)).join(', ') + '.' : '') + '</div>' +
         '<div class="tmems">' + team.filter(Boolean).map(c => memberChip(c)).join('') + '</div>' +
-        '<table class="cov"><tr><th>Top-Meta</th>' + team.map(t => '<th>' + (t ? '<span' + (t.m ? ' class="lnk" data-detail="' + t.m.uid + '"' : '') + '>' + img(t.sp, 'mini') + esc(t.sp.de) + '</span>' : '–') + '</th>').join('') + '</tr>' +
-        ev.map(r => '<tr><td>' + img(r.th.sp, 'mini') + esc(r.th.sp.de) + (r.th.shadow ? ' <small>Crypto</small>' : '') + '</td>' + r.sc.map(cell).join('') + '</tr>').join('') + '</table>' +
+        '<table class="cov"><tr><th>Top-Meta</th>' + team.map(t => '<th>' + (t ? '<span' + (t.m ? ' class="lnk" data-detail="' + t.m.uid + '"' : '') + '>' + img(t.sp, 'mini') + spName(t.sp) + '</span>' : '–') + '</th>').join('') + '</tr>' +
+        ev.map(r => '<tr><td>' + img(r.th.sp, 'mini') + spName(r.th.sp) + (r.th.shadow ? ' <small>Crypto</small>' : '') + '</td>' + r.sc.map(cell).join('') + '</tr>').join('') + '</table>' +
         '<div class="muted small">✓ gewinnt meist · ≈ offen · ✗ verliert meist. Aus den Top-Siegen/-Niederlagen von PvPoke, sonst nach Typen geschätzt (keine echte Kampf-Simulation).</div>' : '<div class="empty">Klick auf einen Slot und wähl ein Pokémon. Dann „Vorschläge für die leeren Slots“, oder stell alle drei selbst zusammen.</div>');
     window.__pvBuild = () => {
-      const fixed = team.filter(Boolean); if (!fixed.length || fixed.length >= 3) { pvSugg = null; renderPvp(); return; }
+      const fixed = team.filter(Boolean); if (fixed.length >= 3) { pvSugg = null; renderPvp(); return; }
       pvSugg = { l, fixed: fixed.map(c => c.label), list: suggestTeams(fixed, pool, l, threats, 5), nReady: mySugg.length }; renderPvp();
     };
     window.__pvUse = i => { const o = pvSugg && pvSugg.list[i]; if (!o) return; state.ui.team[l] = o.team.map(c => c.key); pvSugg = null; save(); renderPvp(); };
