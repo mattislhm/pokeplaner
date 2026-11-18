@@ -1,5 +1,5 @@
-// Offline-Cache für die PokéPlaner-Web-App (Version 1794992047)
-const C = 'pp-1794992047';
+// Offline-Cache für die PokéPlaner-Web-App (Version 1794992902)
+const C = 'pp-1794992902';
 const CORE = ['./', 'index.html', 'app.js', 'style.css', 'data.js', 'data_pvp.js', 'data_pool.js', 'shim.js', 'vendor/qrcode.js', 'manifest.json', 'icon-180.png', 'icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(C).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

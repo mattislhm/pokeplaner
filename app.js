@@ -1677,7 +1677,10 @@
     el.innerHTML = (msg ? '<p class="muted small">' + esc(msg) + '</p>' : '') +
       (syncOn() ? '<p class="small">' + (syncCfg.err ? '⚠ ' + esc(syncCfg.err) : syncCfg.last ? '✔ Zuletzt abgeglichen ' + new Date(syncCfg.last).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' }) : 'Verbunden, gleich wird abgeglichen …') + '</p>' +
         '<div class="btns"><button class="btn" data-syncnow="1">Jetzt abgleichen</button><button class="btn danger" data-syncoff="1">Trennen</button></div>' +
-        (window.PP_WEB ? '' : '<p class="muted small" style="margin-top:10px"><b>Handy verbinden:</b> Code mit der iPhone-Kamera scannen, in Safari öffnen, dann „Teilen“ → „Zum Home-Bildschirm“. Der Code enthält deinen Schlüssel, also nicht weitergeben.</p><div class="qrbox">' + qr + '</div>')
+        (window.PP_WEB ? '' : '<p class="muted small" style="margin-top:10px"><b>Handy verbinden:</b> Auf „Verbindungscode kopieren“ klicken, am iPhone die PokéPlaner-App vom Home-Bildschirm öffnen, Einstellungen → Code einfügen → Verbinden. (Die Zwischenablage geht vom Mac aufs iPhone rüber, wenn beide mit deiner Apple-ID angemeldet sind.) Oder den QR-Code scannen, das verbindet aber nur Safari, nicht die App auf dem Home-Bildschirm. Code und QR-Code enthalten deinen Schlüssel, also nicht weitergeben.</p>' +
+          '<div class="btns"><button class="btn primary" data-synccopy="1">Verbindungscode kopieren</button></div><div class="qrbox">' + qr + '</div>')
+      : window.PP_WEB ? '<p class="muted small">Am Mac unter Einstellungen → „Mac und Handy abgleichen“ auf „Verbindungscode kopieren“ klicken und hier einfügen.</p>' +
+        '<div class="btns"><input type="password" id="syncToken" class="syncin" placeholder="Verbindungscode einfügen" autocomplete="off"><button class="btn primary" data-syncset="1">Verbinden</button></div>'
       : '<p class="muted small">Gleicht deine Pokémon zwischen Mac und Handy ab, auch unterwegs. Dafür einmal einen GitHub-Schlüssel mit dem Recht „Gists“ eintragen.</p>' +
         '<div class="btns"><input type="password" id="syncToken" class="syncin" placeholder="GitHub-Schlüssel (github_pat_… oder ghp_…)" autocomplete="off"><button class="btn primary" data-syncset="1">Verbinden</button></div>');
   }
@@ -1701,13 +1704,14 @@
   const monBy = uid => state.mons.find(m => m.uid === Number(uid));
   function goto(uid) { showDetail(uid); }
   document.addEventListener('click', e => {
-    const t = e.target.closest('[data-syncnow],[data-syncoff],[data-syncset],[data-bgreload],[data-scflag],[data-scall],[data-scdel],[data-scsave],[data-scclear],[data-allbg],[data-league],[data-build],[data-usesugg],[data-clearteam],[data-copy],[data-ics],[data-nt],[data-toggle],[data-tagt],[data-tagf],[data-tagdel],[data-evm],[data-evf],[data-evtab],[data-ivset],[data-hundo],[data-pick],[data-add],[data-tog],[data-del],[data-open],[data-goto],[data-detail],[data-mode-set],[data-show2],[data-mf],[data-pf],[data-boss],.card');
+    const t = e.target.closest('[data-synccopy],[data-syncnow],[data-syncoff],[data-syncset],[data-bgreload],[data-scflag],[data-scall],[data-scdel],[data-scsave],[data-scclear],[data-allbg],[data-league],[data-build],[data-usesugg],[data-clearteam],[data-copy],[data-ics],[data-nt],[data-toggle],[data-tagt],[data-tagf],[data-tagdel],[data-evm],[data-evf],[data-evtab],[data-ivset],[data-hundo],[data-pick],[data-add],[data-tog],[data-del],[data-open],[data-goto],[data-detail],[data-mode-set],[data-show2],[data-mf],[data-pf],[data-boss],.card');
     if (!t) return;
     if (t.dataset.pick) { const m = addMon(t.dataset.pick); closePicker(); showDetail(m.uid); return; }
     if (t.dataset.add) { const m = addMon(t.dataset.add, t.dataset.mode); if (t.dataset.crypto) m.crypto = true; save(); showDetail(m.uid); return; }
     if (t.dataset.syncnow) { syncNow(); renderSyncInfo('Gleiche ab …'); return; }
     if (t.dataset.syncoff) { syncCfg = {}; saveSync(); renderSyncInfo(); return; }
-    if (t.dataset.syncset) { const v = ($('#syncToken') || {}).value || ''; if (v.trim()) syncSetup(v); return; }
+    if (t.dataset.syncset) { const v = (($('#syncToken') || {}).value || '').trim(); if (!v) return; const [tok, gid] = v.split('.'); if (gid) syncCfg.gist = gid; syncSetup(tok); return; }
+    if (t.dataset.synccopy) { navigator.clipboard.writeText(syncCfg.token + '.' + syncCfg.gist).then(() => { t.textContent = '✔ Kopiert'; setTimeout(() => { t.textContent = 'Verbindungscode kopieren'; }, 2500); }).catch(() => {}); return; }
     if (t.dataset.bgreload) { loadBackgrounds(true); renderAll(); return; }
     if (t.dataset.scflag) { const r = scanRows.find(x => x.id === Number(t.dataset.sid)); if (r) { r[t.dataset.scflag] = !r[t.dataset.scflag]; renderScan(); } return; }
     if (t.dataset.scall) { const k = t.dataset.scall, on = !scanRows.every(r => r[k]); scanRows.forEach(r => { r[k] = on; }); renderScan(); return; }
