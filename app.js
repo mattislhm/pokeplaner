@@ -563,6 +563,7 @@
       return true;
     });
   }
+  let mineFreeze = { cfg: '', order: [] };
   function renderMine() {
     const f = state.ui.mf || {};
     $('#mineChips').innerHTML = [['hundo', '💯 Hundo'], ['iv80', 'IV ≥ 80%'], ['shiny', '✨ Shiny'], ['lucky', 'Glück'], ['crypto', 'Crypto'], ['fav', '★ Favoriten'], ['leg', 'Legendär/Myst.'], ['mega', 'Mega-fähig'], ['nomoves', 'Attacken fehlen'], ['bg', '🖼 Hintergrund']]
@@ -576,6 +577,14 @@
     const dir = state.ui.sortAsc ? 1 : -1;
     $('#mineDir').textContent = state.ui.sortAsc ? '↑ aufsteigend' : '↓ absteigend';
     list.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+    // Reihenfolge einfrieren, solange nur Werte bearbeitet werden (sonst springt ein Pokémon beim Ändern von Level/WP weg).
+    // Neu sortiert wird erst, wenn du Sortierung/Filter/Suche änderst oder die Ansicht neu öffnest.
+    const cfg = JSON.stringify([sort, dir, f, tf, $('#mineSearch').value, $('#mineType').value, $('#mineMode').value]);
+    if (mineFreeze.cfg === cfg && mineFreeze.order.length) {
+      const pos = {}; mineFreeze.order.forEach((u, i) => { pos[u] = i; });
+      list.sort((a, b) => (pos[a.uid] ?? -1) - (pos[b.uid] ?? -1));
+    }
+    mineFreeze = { cfg, order: list.map(m => m.uid) };
     $('#mineCount').textContent = list.length + ' von ' + state.mons.length;
     const open = new Set(state.ui.open || []);
     $('#mineList').innerHTML = list.length ? '<div class="mlist">' + list.map(m => {
@@ -1177,10 +1186,10 @@
   }
   // Rangliste einer Liga laden (für PvP-Tipps bei einzelnen Pokémon)
   function loadLeague(k) {
-    if (pvLoading[k] || (pvp.L[k] && Date.now() - (pvp.at[k] || 0) < 24 * 3600e3)) return;
+    if (pvLoading[k] || (pvp.L[k] && (!pvp.L[k].length || pvp.L[k][0].fu) && Date.now() - (pvp.at[k] || 0) < 24 * 3600e3)) return;
     const [cup, cp] = k.split('|'); pvLoading[k] = true;
     fetch('https://raw.githubusercontent.com/pvpoke/pvpoke/master/src/data/rankings/' + cup + '/overall/rankings-' + cp + '.json', { cache: 'no-store' }).then(r => r.json())
-      .then(list => { pvp.L[k] = list.slice(0, 300).map(x => ({ id: x.speciesId, s: x.score, ms: x.moveset || [], w: (x.matchups || []).map(o => o.opponent), lo: (x.counters || []).map(o => o.opponent) })); pvp.at[k] = Date.now(); savePvp(); })
+      .then(list => { pvp.L[k] = list.slice(0, 300).map(pvEntry); pvp.at[k] = Date.now(); savePvp(); })
       .catch(() => { if (!pvp.L[k]) pvp.L[k] = []; })
       .finally(() => { pvLoading[k] = false; renderAll(); });
   }
@@ -1203,14 +1212,17 @@
     return '<div class="adv ok"><b>PvP-Pokémon</b> <span class="muted">(passt mit ' + (wp ? fmt(wp) + ' WP' : 'unbekannten WP') + ' in die ' + fit + '; Attacken laut PvPoke-Meta)</span>' + rows.join('') + '</div>' +
       '<div class="adv muted2">Raid- und Dyna-Tipps sind für dieses Pokémon ausgeblendet. Zum Zurückschalten oben auf „PvP“ klicken.</div>';
   }
+  // Eintrag aus der PvPoke-Rangliste, mit Anteil, wie oft jede Attacke in den Simulationen genutzt wird
+  const pvShare = arr => { const t = (arr || []).reduce((a, m) => a + (m.uses || 0), 0) || 1, o = {}; (arr || []).forEach(m => { o[m.moveId] = (m.uses || 0) / t; }); return o; };
+  const pvEntry = x => ({ id: x.speciesId, s: x.score, ms: x.moveset || [], w: (x.matchups || []).map(o => o.opponent), lo: (x.counters || []).map(o => o.opponent), fu: pvShare((x.moves || {}).fastMoves), cu: pvShare((x.moves || {}).chargedMoves) });
   function loadPvp(force) {
     loadFormats(force);
     const f = curFmt(), k = f.key;
     if (pvLoading[k]) return;
-    if (pvp.L[k] && !force && Date.now() - (pvp.at[k] || 0) < 24 * 3600e3) return;
+    if (pvp.L[k] && pvp.L[k].length && pvp.L[k][0].fu && !force && Date.now() - (pvp.at[k] || 0) < 24 * 3600e3) return;
     pvLoading[k] = true;
     fetch('https://raw.githubusercontent.com/pvpoke/pvpoke/master/src/data/rankings/' + f.cup + '/overall/rankings-' + f.cp + '.json', { cache: 'no-store' }).then(r => r.json())
-      .then(list => { pvp.L[k] = list.slice(0, 300).map(x => ({ id: x.speciesId, s: x.score, ms: x.moveset || [], w: (x.matchups || []).map(o => o.opponent), lo: (x.counters || []).map(o => o.opponent) })); pvp.at[k] = Date.now(); savePvp(); })
+      .then(list => { pvp.L[k] = list.slice(0, 300).map(pvEntry); pvp.at[k] = Date.now(); savePvp(); })
       .catch(() => { if (!pvp.L[k]) pvp.L[k] = []; })
       .finally(() => { pvLoading[k] = false; if (current === 'pvp') renderPvp(); });
   }
@@ -1263,7 +1275,7 @@
     return { key: 'm' + m.uid, label: sp.de + (m.crypto ? ' (Crypto)' : '') + (m.shiny ? ' ✨' : '') + (wpv ? ' ' + fmt(wpv) + ' WP' : '') + (ivPct(m) !== null ? ' ' + ivPct(m) + '%' : ''), info: info + (rd.note ? ' · ' + rd.note : ''), rd: rd.q, ps, sp, t: sp.t, pv, m, mt: mvs.length ? mvs.map(id => mv(id).t) : me ? me.ms.map(id => pvMove(id)[1]) : sp.t }; };
   // PvP-Status eines eigenen Pokémon in einer Liga. Score = PvPoke-Wert der Art in dieser Liga.
   // Fertig nur, wenn: Attacken wie von PvPoke empfohlen (Sofortattacke + beide Lade-Attacken),
-  // IVs: Meisterliga mind. 42/45 und Angriff ab 13, sonst IV-Rang in den Top 10 % (Rang ≤ 410 von 4096),
+  // IVs: Meisterliga mind. 39/45 und Angriff ab 13, sonst IV-Rang in den Top 10 % (Rang ≤ 410 von 4096),
   // WP/Level: Meisterliga ab Level 49, sonst höchstens Liga-Limit und mind. 97 % davon.
   const PV_TOP = 410;
   function pvStatus(m, f) {
@@ -1271,15 +1283,22 @@
     const issues = [], st = statsOf(m), wpv = Number(m.wp) || (st.l ? st.cp : 0);
     if (!e) issues.push('nicht unter den Top 300 dieser Liga');
     else {
-      const f0 = pvFast(e.ms[0]), cs = e.ms.slice(1).map(pvCharged).filter(Boolean), have = [m.c1, m.c2].filter(Boolean);
-      if (f0 && m.fast !== f0) issues.push('Sofortattacke ' + mv(f0).n + ' fehlt' + (m.fast ? ' (hat ' + mv(m.fast).n + ')' : ''));
-      const miss = cs.filter(c => !have.includes(c));
-      if (miss.length) issues.push('Lade-Attacke fehlt: ' + miss.map(c => mv(c).n).join(', '));
-      if (cs.length > 1 && have.length < 2 && !miss.length) issues.push('zweite Lade-Attacke fehlt');
+      // Attacken nach PvPoke-Nutzung: Sofortattacke muss mind. halb so oft genutzt werden wie die beste,
+      // eine fehlende Lade-Attacke mit über 30 % Nutzung zählt nur, wenn deine Ersatz-Attacke weniger als halb so oft genutzt wird
+      const toPv = id => id ? id.replace(/_FAST$/, '').replace(/^FUTURESIGHT$/, 'FUTURE_SIGHT') : '';
+      const fu = e.fu || {}, cu = e.cu || {}, f0 = pvFast(e.ms[0]), cs = e.ms.slice(1).map(pvCharged).filter(Boolean), have = [m.c1, m.c2].filter(Boolean);
+      const topF = Math.max(0, ...Object.values(fu)), myF = fu[toPv(m.fast)] || 0;
+      if (!m.fast) issues.push('Sofortattacke fehlt (' + mv(f0).n + ')');
+      else if (e.fu ? myF < topF * 0.5 : m.fast !== f0) issues.push('Sofortattacke ' + mv(f0).n + ' fehlt (hat ' + mv(m.fast).n + ')');
+      if (have.length < 2) issues.push(have.length ? 'zweite Lade-Attacke fehlt' : 'Lade-Attacken fehlen');
+      else {
+        const myC = have.map(c => cu[toPv(c)] || 0), alt = Math.min(...myC);
+        cs.filter(c => !have.includes(c)).forEach(c => { const sh = cu[toPv(c)] || 0; if (e.cu ? (sh >= 0.3 && alt < sh / 2) : true) issues.push('Lade-Attacke ' + mv(c).n + ' fehlt'); });
+      }
     }
     let ivTxt = '';
     if (!hasIV(m)) issues.push('IVs fehlen');
-    else if (cap >= 10000) { const iv = ivs(m), sum = iv[0] + iv[1] + iv[2]; ivTxt = iv.join('/'); if (sum < 42 || iv[0] < 13) issues.push('IVs zu niedrig für die Meisterliga (' + ivTxt + ')'); }
+    else if (cap >= 10000) { const iv = ivs(m), sum = iv[0] + iv[1] + iv[2]; ivTxt = iv.join('/'); if (sum < 39 || iv[0] < 13) issues.push('IVs zu niedrig für die Meisterliga (' + ivTxt + ')'); }
     else { const r = myRank(m, cap); if (r) { ivTxt = 'IV-Rang ' + r.rank; if (r.rank > PV_TOP) issues.push('IV-Rang ' + r.rank + ', nicht in den Top 10 %'); } }
     if (cap >= 10000) { const l = st.l || 0; if (l < 49) issues.push(l ? 'erst Level ' + String(l).replace('.', ',') + ', sollte 50 sein' : 'Level/WP fehlt'); }
     else if (!wpv) issues.push('WP fehlen');
@@ -1799,6 +1818,7 @@
     ({ overview: renderOverview, mine: renderMine, team: renderTeam, ranking: renderRanking, raids: renderRaids, rranking: renderRRanking, events: renderEvents, settings: () => { renderSources(); renderNotifSettings(); renderBackup(); renderSubs(); }, cleanup: renderCleanup, pvp: renderPvp }[current] || (() => {}))();
   }
   function show(v) {
+    if (v === 'mine' && current !== 'mine') mineFreeze = { cfg: '', order: [] };
     current = v;
     document.querySelectorAll('.nav').forEach(b => b.classList.toggle('active', b.dataset.view === v));
     document.querySelectorAll('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
