@@ -82,8 +82,8 @@
   // Variante = Pokémon in einer Form (normal, Mega, Proto) mit eigenen Werten/Typen
   const baseVar = sp => ({ sp, t: sp.t, b: sp.b, img: sp.img, mega: null, label: '' });
   const megaVars = sp => (sp.mg || []).map(g => ({ sp, t: g.t, b: g.b, img: g.img, mega: g.id, label: g.n }));
-  // Megas eines eigenen Pokémon: m.mega '' = nicht angegeben (alle möglichen), 'none' = keine, sonst die freigeschaltete Form
-  const monMegaVars = m => { if (m.crypto || m.mega === 'none') return []; const all = megaVars(spOf(m)); return m.mega ? all.filter(v => v.mega === m.mega) : all; };
+  // Megas eines eigenen Pokémon: m.mega '' = nicht angegeben (keine), 'none' = keine, sonst die freigeschaltete Form
+  const monMegaVars = m => { if (m.crypto || m.mega === 'none') return []; const all = megaVars(spOf(m)); return m.mega ? all.filter(v => v.mega === m.mega) : []; };
   const varName = v => (v.label ? v.label + ' ' : '') + v.sp.de + (v.sp.f ? ' (' + v.sp.f + ')' : '');
 
   // ---------- state ----------
