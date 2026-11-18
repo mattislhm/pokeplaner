@@ -602,8 +602,13 @@
   }
   function leagueLine(m, k) {
     const ps = pvStatus(m, fmtOf(k)); if (!ps.rank) return '';
-    return '<div class="sub small2"><b>Platz ' + ps.rank + '</b> · Score ' + ps.score.toFixed(1) + (ps.ivTxt && !ps.issues.some(x => /^IV-Rang/.test(x)) ? ' · ' + ps.ivTxt : '') +
-      (ps.ok ? ' <span class="rdy ok">✓ fertig</span>' : ' <span class="muted">· fehlt: ' + ps.issues.map(esc).join(' · ') + '</span>') + '</div>';
+    const r = hasIV(m) ? myRank(m, fmtOf(k).cp) : null;
+    return '<div class="sub small2 lgl">#' + ps.rank + ' · Score ' + Math.round(ps.score) + (r ? ' · IV-Rang ' + r.rank : '') +
+      (ps.ok ? ' <span class="rdy ok">✓ fertig</span>' : ' <span class="rdy no">nicht fertig</span>') + '</div>';
+  }
+  function leagueWhy(m, k) {
+    const f = fmtOf(k), ps = pvStatus(m, f); if (!ps.rank) return '';
+    return '<div class="adv ' + (ps.ok ? 'ok' : 'up') + '"><b>' + esc(f.title) + ':</b> ' + (ps.ok ? 'fertig ✓' : 'noch nicht fertig, weil:<ul class="why">' + ps.issues.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>') + '</div>';
   }
   function renderMine() {
     const f = state.ui.mf || {};
@@ -629,18 +634,27 @@
       list.sort((a, b) => (pos[a.uid] ?? -1) - (pos[b.uid] ?? -1));
     }
     mineFreeze = { cfg, order: list.map(m => m.uid) };
+    // Liga-Filter: pro Art nur das beste Exemplar, die anderen eingeklappt unter „+N weitere“
+    const more = {}, subs = new Set();
+    if (state.ui.mlg) {
+      const groups = {}, order = [], mo = new Set(state.ui.mlgMore || []);
+      list.forEach(m => { const g = m.k + (m.crypto ? '|c' : ''); if (!groups[g]) { groups[g] = []; order.push(g); } groups[g].push(m); });
+      list.length = 0;
+      order.forEach(g => { const [best, ...rest] = groups[g]; list.push(best); more[best.uid] = { g, n: rest.length }; if (mo.has(g)) rest.forEach(m => { subs.add(m.uid); list.push(m); }); });
+    }
     $('#mineCount').textContent = list.length + ' von ' + state.mons.length;
     if (state.ui.mlg && !metaOf(state.ui.mlg).length) loadLeague(state.ui.mlg);
     const open = new Set(state.ui.open || []);
     $('#mineList').innerHTML = list.length ? '<div class="mlist">' + list.map(m => {
       const sp = spOf(m), st = statsOf(m), p = ivPct(m), isOpen = open.has(m.uid);
-      return '<div class="mitem' + (isOpen ? ' open' : '') + '" id="item-' + m.uid + '"><div class="mrow" data-toggle="' + m.uid + '">' + monPic(m, 'small') +
+      return '<div class="mitem' + (isOpen ? ' open' : '') + (subs.has(m.uid) ? ' sub2' : '') + '" id="item-' + m.uid + '"><div class="mrow" data-toggle="' + m.uid + '">' + monPic(m, 'small') +
         '<div class="mr-name"><b>' + modeBadge(m.mode) + spName(sp) + '</b><div class="sub">' + sp.t.map(typeTag).join('') + megaTag(m) + '</div>' + (state.ui.mlg ? leagueLine(m, state.ui.mlg) : '') + '</div>' +
         '<div class="mr-tags">' + monTags(m) + '</div>' +
         '<div class="mr-iv ' + (p === null ? 'muted' : p === 100 ? 'hu' : p >= 80 ? 'good' : '') + '">' + (p === null ? '–' : p + '%') + '<small>' + (hasIV(m) ? m.iv.join('/') : 'IV') + '</small></div>' +
         '<div class="mr-cp">' + (st.l ? fmt(st.cp) + ' WP' : '–') + '<small>' + (st.l ? 'Lv ' + String(st.l).replace('.', ',') : '') + '</small></div>' +
         '<div class="mr-mv">' + (m.fast ? esc(mv(m.fast).n) : '<span class="warn">?</span>') + ' / ' + (m.c1 ? esc(mv(m.c1).n) : '<span class="warn">?</span>') + (m.c2 ? ' / ' + esc(mv(m.c2).n) : '') + '</div>' +
-        '<span class="chev">' + (isOpen ? '▴' : '▾') + '</span></div>' + (isOpen ? '<div class="mdetail">' + monDetail(m) + '</div>' : '') + '</div>';
+        '<span class="chev">' + (isOpen ? '▴' : '▾') + '</span></div>' + (isOpen ? '<div class="mdetail">' + (state.ui.mlg ? leagueWhy(m, state.ui.mlg) : '') + monDetail(m) + '</div>' : '') + '</div>' +
+        (more[m.uid] && more[m.uid].n ? '<button class="moremon" data-mlgmore="' + esc(more[m.uid].g) + '">' + ((state.ui.mlgMore || []).includes(more[m.uid].g) ? '▴ weitere ' + spOf(m).de + ' ausblenden' : '+' + more[m.uid].n + ' weitere ' + spOf(m).de) + '</button>' : '');
     }).join('') + '</div>' : '<div class="empty big">' + (state.mons.length ? 'Nichts gefunden. Filter anpassen.' : 'Noch keine Pokémon. Klick auf <b>＋ Pokémon hinzufügen</b> oder importier deine Liste.') + '</div>';
     $('#openCount').textContent = open.size ? open.size + ' offen' : '';
   }
@@ -1941,7 +1955,7 @@
   const monBy = uid => state.mons.find(m => m.uid === Number(uid));
   function goto(uid) { showDetail(uid); }
   document.addEventListener('click', e => {
-    const t = e.target.closest('[data-pvclear],[data-pvslot],[data-pvclose],[data-pvchoose],[data-synccopy],[data-syncnow],[data-syncoff],[data-syncset],[data-bgreload],[data-scflag],[data-scall],[data-scdel],[data-scsave],[data-scclear],[data-allbg],[data-league],[data-build],[data-usesugg],[data-clearteam],[data-copy],[data-ics],[data-nt],[data-toggle],[data-tagt],[data-tagf],[data-tagdel],[data-evm],[data-evf],[data-evtab],[data-ivset],[data-hundo],[data-pick],[data-add],[data-tog],[data-del],[data-open],[data-goto],[data-detail],[data-mode-set],[data-show2],[data-mf],[data-pf],[data-boss],.card');
+    const t = e.target.closest('[data-pvclear],[data-pvslot],[data-pvclose],[data-pvchoose],[data-synccopy],[data-syncnow],[data-syncoff],[data-syncset],[data-bgreload],[data-scflag],[data-scall],[data-scdel],[data-scsave],[data-scclear],[data-allbg],[data-league],[data-build],[data-usesugg],[data-clearteam],[data-copy],[data-ics],[data-nt],[data-toggle],[data-tagt],[data-tagf],[data-tagdel],[data-evm],[data-evf],[data-evtab],[data-ivset],[data-hundo],[data-pick],[data-add],[data-tog],[data-del],[data-open],[data-goto],[data-detail],[data-mode-set],[data-show2],[data-mf],[data-mlgmore],[data-pf],[data-boss],.card');
     if (!t) return;
     if (t.dataset.pick) { const m = addMon(t.dataset.pick); closePicker(); showDetail(m.uid); return; }
     if (t.dataset.add) { const m = addMon(t.dataset.add, t.dataset.mode); if (t.dataset.crypto) m.crypto = true; save(); showDetail(m.uid); return; }
@@ -1977,6 +1991,7 @@
     if (t.dataset.evtab) { state.ui.evtab = t.dataset.evtab; save(); renderEvents(); return; }
     if (t.dataset.ivset) { const m = monBy(t.dataset.uid), i = Number(t.dataset.i), v = Number(t.dataset.ivset); m.iv[i] = v; if (m.lvl) { const w = wpFor(m); if (w) m.wp = w; } else { const l = levelFromWp(m); if (l) { m.lvl = l; m.lvlSrc = 'wp'; } } save(); renderAll(); return; }
     if (t.dataset.hundo) { const m = monBy(t.dataset.hundo); m.iv = [15, 15, 15]; if (m.lvl) { const w = wpFor(m); if (w) m.wp = w; } save(); renderAll(); return; }
+    if (t.dataset.mlgmore) { const g = t.dataset.mlgmore, a = new Set(state.ui.mlgMore || []); a.has(g) ? a.delete(g) : a.add(g); state.ui.mlgMore = [...a]; save(); mineFreeze.cfg = null; renderMine(); return; }
     if (t.dataset.mf) { state.ui.mf = state.ui.mf || {}; state.ui.mf[t.dataset.mf] = !state.ui.mf[t.dataset.mf]; save(); renderMine(); return; }
     if (t.dataset.pf) { state.ui.pf = state.ui.pf || {}; state.ui.pf[t.dataset.pf] = !state.ui.pf[t.dataset.pf]; save(); renderPicker(); return; }
     if (t.dataset.boss) { $('#rbossSel').value = t.dataset.boss; $('#rbossT1').value = ''; $('#rbossT2').value = ''; state.rboss = t.dataset.boss; fillBossMoves('rboss'); save(); renderRaids(); return; }
