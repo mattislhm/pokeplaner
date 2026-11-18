@@ -164,14 +164,22 @@
     const c = cpmAt(l);
     return Math.max(10, Math.floor((base[0] + iv[0]) * Math.sqrt(base[1] + iv[1]) * Math.sqrt(base[2] + iv[2]) * c * c / 10));
   }
+  // +1 Level nur, wenn Bester Kumpel UND gerade als Kumpel aktiv
+  function buddyBoost(m) { return m.buddy && m.buddyActive ? 1 : 0; }
   // Level aus WP (Kumpel-Bonus: angezeigte WP gelten für Level +1)
   function levelFromWp(m) {
     if (!hasIV(m) || !m.wp) return null;
-    const base = spOf(m).b, iv = ivs(m), wp = Number(m.wp), bb = m.buddy ? 1 : 0;
+    const base = spOf(m).b, iv = ivs(m), wp = Number(m.wp), bb = buddyBoost(m);
     for (let l = 1; l <= 50; l += 0.5) if (cpFor(base, iv, l + bb) === wp) return l;
     return null;
   }
-  const wpFor = m => hasIV(m) && m.lvl ? cpFor(spOf(m).b, ivs(m), Number(m.lvl) + (m.buddy ? 1 : 0)) : null;
+  const wpFor = m => hasIV(m) && m.lvl ? cpFor(spOf(m).b, ivs(m), Number(m.lvl) + buddyBoost(m)) : null;
+  // Umstellung: früher galt +1 Level für jeden Besten Kumpel dauerhaft, jetzt nur für den gerade aktiven
+  state.mons.forEach(m => {
+    if (!m.buddy || m.buddyActive !== undefined) return;
+    if (!m.lvl && m.wp && hasIV(m)) { m.buddyActive = true; const l = levelFromWp(m); if (l) { m.lvl = l; m.lvlSrc = 'wp'; } }
+    m.buddyActive = false; const w = wpFor(m); if (w) m.wp = w;
+  });
   function levelOf(m) {
     if (m.lvl) return { l: Number(m.lvl), src: m.lvlSrc || 'manual' };
     const w = levelFromWp(m);
@@ -182,7 +190,7 @@
   function statsOf(m, v) {
     const lv = levelOf(m), base = (v || baseVar(spOf(m))).b, iv = hasIV(m) ? ivs(m) : [15, 15, 15];
     const sm = v && v.mega && Number(m.mlv) === 4 && superMaxOk(v.sp, v.mega) ? 2 : 0;
-    const l = (lv.l || 40) + (m.buddy && lv.l ? 1 : 0) + sm, c = cpmAt(l), cr = m.crypto && m.mode === 'n' && !(v && v.mega);
+    const l = (lv.l || 40) + (lv.l ? buddyBoost(m) : 0) + sm, c = cpmAt(l), cr = m.crypto && m.mode === 'n' && !(v && v.mega);
     return { l: lv.l, src: lv.src, atk: (base[0] + iv[0]) * c * (cr ? 1.2 : 1), def: (base[1] + iv[1]) * c * (cr ? 5 / 6 : 1),
       hp: Math.max(10, Math.floor((base[2] + iv[2]) * c)), cp: cpFor(spOf(m).b, iv, l) };
   }
@@ -491,7 +499,7 @@
         out.push(bf ? '<div class="adv up"><b>Raids:</b> Lade-Attacken passen, aber <b>' + esc(mv(bf.f).n) + '</b>' + kindTag(sp, bf.f) + ' ist als Sofortattacke besser <span class="muted">(+' + Math.max(1, Math.round((bf.er / cur.er - 1) * 100)) + '%)</span></div>' : '<div class="adv ok"><b>Raids:</b> Attacken passen ✔</div>');
       }
     }
-    if (sp.mg && !m.crypto && m.mega !== 'none') out.push('<div class="adv muted2">' + (m.mega ? 'Als ' + esc((sp.mg.find(g => g.id === m.mega) || {}).n || 'Mega') + ' (Level ' + (m.mlv || 1) + ')' : 'Kann ' + sp.mg.map(g => esc(g.n)).join(' / ')) + ': wird im Raid-Planer mit eingeplant (max. 1 Mega pro Team).</div>');
+    if (sp.mg && !m.crypto && m.mega !== 'none') out.push('<div class="adv muted2">' + (m.mega ? 'Als ' + esc((sp.mg.find(g => g.id === m.mega) || {}).n || 'Mega') + ' (Level ' + (m.mlv || 1) + '): wird im Raid-Planer mit eingeplant (max. 1 Mega pro Team).' : 'Kann ' + sp.mg.map(g => esc(g.n)).join(' / ') + '. Wenn du es freigeschaltet hast, stell es oben ein, dann plant der Raid-Planer es mit ein.') + '</div>');
     return out.join('');
   }
   function costBlock(m) {
@@ -504,7 +512,7 @@
   function monDetail(m) {
     const sp = spOf(m), st = statsOf(m), role = roleOf(m), p = plan(m, role), r = ivRating(m, role === 'att' || role === 'raid');
     const sel = (k, min) => '<select data-k="' + k + '" data-uid="' + m.uid + '">' + [0, 1, 2, 3].filter(v => v >= min).map(v => '<option value="' + v + '"' + (m[k] === v ? ' selected' : '') + '>' + (v === 0 ? '–' : v === 3 ? 'Max' : v) + '</option>').join('') + '</select>';
-    const lvInfo = st.l ? 'Lv ' + String(st.l).replace('.', ',') + (m.buddy ? ' (+1 Kumpel = ' + String(st.l + 1).replace('.', ',') + ')' : '') : 'Level unbekannt';
+    const lvInfo = st.l ? 'Lv ' + String(st.l).replace('.', ',') + (buddyBoost(m) ? ' (+1 aktiver Kumpel = ' + String(st.l + 1).replace('.', ',') + ')' : '') : 'Level unbekannt';
     const modes = sp.m.map(x => '<button class="seg' + (m.mode === x ? ' on' : '') + '" data-mode-set="' + x + '" data-uid="' + m.uid + '">' + MODE_NAME[x] + '</button>').join('');
     const mm = isMaxMode(m) ? maxMove(sp, m.mode, effFast(m)) : null;
     const tcls = id => id && mv(id) ? ' class="mvsel t-' + mv(id).t + '"' : ' class="mvsel"';
@@ -537,11 +545,11 @@
         }).join('') + '<button class="btn mini" data-hundo="' + m.uid + '">💯 15/15/15</button></div>' +
       '<div class="mon-row"><span class="lbl3">WP</span><input class="num wide" type="number" min="10" placeholder="WP" data-wp="' + m.uid + '" value="' + esc(m.wp) + '">' +
         '<span class="lbl3">Level</span><input class="num" type="number" min="1" max="50" step="0.5" placeholder="Lv" data-lvl="' + m.uid + '" value="' + esc(m.lvl) + '">' +
-        '<label class="toggle small2"><input type="checkbox" data-tog-c="buddy" data-uid="' + m.uid + '"' + (m.buddy ? ' checked' : '') + '> Bester Kumpel (+1 Level)</label>' +
+        '<label class="toggle small2"><input type="checkbox" data-tog-c="buddy" data-uid="' + m.uid + '"' + (m.buddy ? ' checked' : '') + '> Bester Kumpel</label>' + (m.buddy ? '<label class="toggle small2"><input type="checkbox" data-tog-c="buddyActive" data-uid="' + m.uid + '"' + (m.buddyActive ? ' checked' : '') + '> gerade aktiv (+1 Level)</label>' : '') +
         '<span class="muted small2">' + (hasIV(m) ? 'Eins eingeben, das andere füllt sich selbst.' : 'Erst IVs setzen, dann rechnet es WP ↔ Level um.') + '</span></div>' +
       '<div class="mon-stats">' + (r ? '<span class="ivr ' + r.cls + '">' + r.txt + '</span>' : '<span class="muted">IVs eintragen</span>') +
         '<span>' + lvInfo + '</span>' + (st.l ? '<span>' + fmt(st.cp) + ' WP</span><span>' + st.hp + ' KP</span><span>Angr. ' + st.atk.toFixed(0) + '</span><span>Vert. ' + st.def.toFixed(0) + '</span>' : '') +
-        (m.wp && hasIV(m) && st.src !== 'wp' ? '<span class="warn">WP passt nicht zu den IVs</span>' : '') + '</div>' +
+        (m.wp && hasIV(m) && st.src !== 'wp' && wpFor(m) !== Number(m.wp) ? '<span class="warn">WP passt nicht zu IVs und Level</span>' : '') + '</div>' +
       (isMaxMode(m) ? '<div class="mon-row"><span class="lbl3">Dyna-Attacken</span><label>⚔ ' + sel('ma', 1) + '</label><label>🛡 ' + sel('mg', 0) + '</label><label>💚 ' + sel('ms', 0) + '</label></div>' : '') +
       '<div class="mon-next ' + (p.next ? '' : 'done') + '">' + (p.next ? '➜ ' + esc(p.next.txt) + ' <span class="muted">· ' + esc(p.next.cost) + '</span>' : '✔ Fertig ausgebaut') + '</div>' +
       (m.caught || m.where ? '<div class="muted small2" style="margin-top:6px">Gefangen ' + (m.caught ? m.caught.split('-').reverse().join('.') : '') + (m.where ? ' in der Nähe von ' + esc(m.where) : '') + '</div>' : '') +
@@ -1275,7 +1283,7 @@
   }
   function myRank(m, cap) {
     if (!hasIV(m)) return null;
-    const iv = ivs(m), t = ivRanks(spOf(m), cap, m.buddy ? 51 : 50);
+    const iv = ivs(m), t = ivRanks(spOf(m), cap, buddyBoost(m) ? 51 : 50);
     return t.map[iv[0] * 256 + iv[1] * 16 + iv[2]];
   }
   const pvIdOf = m => { const b = PVREV[m.k]; return b ? b + (m.crypto ? '_shadow' : '') : null; };
@@ -1724,7 +1732,8 @@
       if (state.mons.some(m => m.k === r.k && m.iv.join() === r.iv.join() && String(m.wp) === String(r.wp))) { dup++; return; }
       const m = addMon(r.k, r.mode);
       // Kumpel: angezeigte Werte gelten für Level +1
-      Object.assign(m, { buddy: !!r.buddy, iv: r.iv.slice(), wp: r.wp || '', lvl: r.lvl ? (r.buddy ? Math.max(1, r.lvl - 1) : r.lvl) : '', lvlSrc: 'wp', shiny: r.shiny, lucky: r.lucky, crypto: r.crypto && r.mode === 'n', purified: r.purified, fav: r.fav, bg: r.bg || '', caught: r.caught || '', where: r.where || '' });
+      if (r.buddy) state.mons.forEach(o => { if (o.buddyActive) { o.buddyActive = false; const w2 = wpFor(o); if (w2) o.wp = w2; } });
+      Object.assign(m, { buddy: !!r.buddy, buddyActive: !!r.buddy, iv: r.iv.slice(), wp: r.wp || '', lvl: r.lvl ? (r.buddy ? Math.max(1, r.lvl - 1) : r.lvl) : '', lvlSrc: 'wp', shiny: r.shiny, lucky: r.lucky, crypto: r.crypto && r.mode === 'n', purified: r.purified, fav: r.fav, bg: r.bg || '', caught: r.caught || '', where: r.where || '' });
       n++;
     });
     scanRows = keep; renderScan(); save(); renderAll();
@@ -1946,7 +1955,7 @@
   document.addEventListener('change', e => {
     const t = e.target, d = t.dataset;
     if (d.mv) { const m = monBy(d.uid); m[d.mv] = t.value; if (d.mv === 'c2' && !t.value) m.show2 = false; save(); renderAll(); return; }
-    if (d.togC) { const m = monBy(d.uid); m[d.togC] = t.checked; if (d.togC === 'buddy') { const w = wpFor(m); if (w) m.wp = w; } save(); renderAll(); return; }
+    if (d.togC) { const m = monBy(d.uid); m[d.togC] = t.checked; if (d.togC === 'buddyActive' && t.checked) state.mons.forEach(o => { if (o !== m && o.buddyActive) { o.buddyActive = false; const w2 = wpFor(o); if (w2) o.wp = w2; } }); if (d.togC === 'buddy' || d.togC === 'buddyActive') { if (!m.buddy) m.buddyActive = false; const w = wpFor(m); if (w) m.wp = w; } save(); renderAll(); return; }
     if (d.k) { const m = monBy(d.uid); m[d.k] = Number(t.value); save(); renderAll(); return; }
     if (d.wp) { const m = monBy(d.wp); m.wp = t.value === '' ? '' : Math.max(10, Math.round(Number(t.value))); m.lvl = ''; const l = levelFromWp(m); if (l) { m.lvl = l; m.lvlSrc = 'wp'; } save(); renderAll(); return; }
     if (d.lvl) { const m = monBy(d.lvl); m.lvl = t.value === '' ? '' : Math.max(1, Math.min(50, Math.round(Number(t.value) * 2) / 2)); m.lvlSrc = 'manual'; const w = wpFor(m); if (w) m.wp = w; save(); renderAll(); return; }
