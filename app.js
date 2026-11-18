@@ -938,11 +938,14 @@
 
   // ---------- Für dich: Shiny fehlt / hast du noch nicht ----------
   const ldDex = img => { const m = /pm(\d+)|pokemon_icon_(\d+)/.exec(img || ''); return m ? Number(m[1] || m[2]) : 0; };
+  // „Shiny fehlt“ nur bei Legendären, Mysteriösen und Ultrabestien
+  const LEGDEX = new Set(DB.filter(s => s.cls).map(s => s.dex));
+  const shinyWorth = dex => LEGDEX.has(dex);
   function ownInfo(dex) { const own = state.mons.filter(m => spOf(m).dex === dex); return { has: own.length > 0, shiny: own.some(m => m.shiny) }; }
   function forMeTags(dex, canShiny) {
     const o = ownInfo(dex), out = [];
     if (!o.has) out.push('<span class="fm neu">🆕 fehlt dir</span>');
-    if (canShiny && !o.shiny) out.push('<span class="fm sh">✨ Shiny fehlt</span>');
+    if (canShiny && !o.shiny && shinyWorth(dex)) out.push('<span class="fm sh">✨ Shiny fehlt</span>');
     return out.join('');
   }
   function monsOfEvent(e) {
@@ -988,7 +991,7 @@
       if (st - now <= n.lead * 60000 && st > now - 5 * 60000 && !n.seen[key]) {
         n.seen[key] = now; save();
         const mins = Math.max(0, Math.round((st - now) / 60000));
-        const extra = monsOfEvent(e).filter(p => p.shiny && !ownInfo(p.dex).shiny).map(p => deName(p.dex, p.name));
+        const extra = monsOfEvent(e).filter(p => p.shiny && shinyWorth(p.dex) && !ownInfo(p.dex).shiny).map(p => deName(p.dex, p.name));
         try { new Notification(e.name, { body: (mins ? 'Startet in ' + mins + ' Min.' : 'Startet jetzt') + ' · ' + evT(e)[0] + (extra.length ? ' · ✨ Shiny fehlt dir: ' + extra.join(', ') : '') }); } catch (err) {}
       }
     });
@@ -1103,7 +1106,7 @@
     cal += '</div>';
     const fd = [];
     const fdSeen = new Set();
-    running.concat(upcoming).forEach(e => monsOfEvent(e).forEach(p => { const o = ownInfo(p.dex), k = p.dex + '|' + e.eventType; if (fdSeen.has(k)) return; if ((p.shiny && !o.shiny) || !o.has) { fdSeen.add(k); fd.push({ e, p, o }); } }));
+    running.concat(upcoming).forEach(e => monsOfEvent(e).forEach(p => { const o = ownInfo(p.dex), k = p.dex + '|' + e.eventType; if (fdSeen.has(k)) return; if ((p.shiny && shinyWorth(p.dex) && !o.shiny) || !o.has) { fdSeen.add(k); fd.push({ e, p, o }); } }));
     const fdHtml = fd.length ? '<h2 class="sub">💡 Für dich interessant</h2><div class="fdl">' + fd.slice(0, 16).map(x => '<a class="fdi" href="' + esc(x.e.link) + '" target="_blank"><img src="' + esc(x.p.img) + '" alt=""><div><b>' + esc(deName(x.p.dex, x.p.name)) + '</b> ' + forMeTags(x.p.dex, x.p.shiny) + '<div class="sub">' + esc(evT(x.e)[0]) + ' · ' + (evDate(x.e.start) <= now ? 'läuft bis ' + dfmt(evDate(x.e.end)) : 'ab ' + dfmt(evDate(x.e.start))) + '</div></div></a>').join('') + '</div>' : '';
     const cds = upcoming.concat(running).filter(e => e.eventType === 'community-day' && monsOfEvent(e).length);
     out.innerHTML = fdHtml + (cds.length ? '<h2 class="sub">🌟 Community Day: was entwickeln?</h2>' + cds.map(cdHelp).join('') : '') + '<h2 class="sub">🔴 Läuft gerade (' + running.length + ')</h2><div class="evgrid">' + (running.map(e => evCard(e, now)).join('') || '<div class="empty">Nichts.</div>') + '</div>' +
