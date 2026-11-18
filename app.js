@@ -518,7 +518,7 @@
         '<label><span class="lbl3">Lade 1</span>' + chSel('c1', '– wählen –') + '</label>' +
         (m.c2 || m.show2 ? '<label><span class="lbl3">Lade 2</span>' + chSel('c2', '– keine –') + '</label>' : '<button class="btn mini" data-show2="' + m.uid + '">＋ Zweite Lade-Attacke</button>') +
       '</div>' +
-      '<div class="advs">' + advice(m) + '</div>' +
+      '<div class="advs">' + advice(m) + aeMonBox(m) + '</div>' +
       '<div class="ivbox">' + ['Angriff', 'Verteidigung', 'KP'].map((l, i) => {
           const v = m.iv[i] === '' ? null : Number(m.iv[i]);
           return '<div class="ivline"><span class="ivl">' + l + '</span><div class="ivbar' + (v === 15 ? ' full' : '') + '">' +
@@ -687,7 +687,7 @@
     html += '<h2 class="sub">Beste Angreifer aus der Datenbank gegen diesen Boss</h2><div class="rank">' + bestDB.map((y, i) => '<div class="rk"><span class="rk-n">' + (i + 1) + '</span>' + img(y.x.sp) + '<div class="grow"><b>' + modeBadge(y.x.mode) + spName(y.x.sp) + '</b><div class="sub">' + esc(mv(y.x.f).n) + kindTag(y.x.sp, y.x.f) + ' → ' + esc(y.x.mm.n) + ' ' + typeTag(y.x.t) + '</div></div><span class="dmg">' + fmt(y.d) + '</span><button class="add" data-add="' + y.x.sp.k + '" data-mode="' + y.x.mode + '" title="Hab ich">＋</button></div>').join('') + '</div>';
     const weakM = weakTo(bt).slice(0, 4).map(TYPKEY);
     if (weakM.length) html += '<h2 class="sub">Suchtext fürs Spiel</h2>' + searchBox('Dyna-Pokémon mit passendem Dyna-Angriff', 'dynamax,gigadynamax&' + weakM.map(t => '@1' + t).join(','), 'Bei Dynamax zählt der Typ der Schnell-Attacke. Gigadynamax-Pokémon prüf extra, deren Giga-Attacke ist fest.');
-    out.innerHTML = html;
+    out.innerHTML = aeTips(['max'], 'Vor dem Dyna-Kampf aktivieren') + html;
   }
 
   // ----- Normale Raids -----
@@ -745,7 +745,7 @@
     const weak = weakTo(ctx.boss.t).slice(0, 4).map(TYPKEY);
     if (weak.length) html += '<h2 class="sub">Suchtexte fürs Spiel</h2>' + (team.length ? searchBox('Dein Team aus der Box', dexList(team.map(x => x.v.sp.dex)) + (team.some(x => x.m.crypto) ? '' : '&!crypto'), 'Pokédex-Nummern deiner 6. Bei mehreren gleichen nimm das mit dem höchsten WP.') : '') +
       searchBox('Alle Konter mit passenden Attacken', weak.map(t => '@1' + t).join(',') + '&' + weak.map(t => '@2' + t + ',@3' + t).join(','), 'Schnell-Attacke UND eine Lade-Attacke vom Typ ' + weak.join('/') + '.');
-    out.innerHTML = html;
+    out.innerHTML = aeTips(ctx.boss && ctx.boss.mega ? ['raid', 'megaraid'] : ['raid'], 'Vor dem Raid aktivieren') + html;
   }
 
   // ----- Aktuelle Raid-Bosse (live) -----
@@ -1108,7 +1108,7 @@
     running.concat(upcoming).forEach(e => monsOfEvent(e).forEach(p => { const o = ownInfo(p.dex), k = p.dex + '|' + e.eventType; if (fdSeen.has(k)) return; if (p.shiny && shinyWorth(p.dex) && !o.shiny) { fdSeen.add(k); fd.push({ e, p, o }); } }));
     const fdHtml = fd.length ? '<h2 class="sub">💡 Für dich interessant</h2><div class="fdl">' + fd.slice(0, 16).map(x => '<a class="fdi" href="' + esc(x.e.link) + '" target="_blank"><img src="' + esc(x.p.img) + '" alt=""><div><b>' + esc(deName(x.p.dex, x.p.name)) + '</b> ' + forMeTags(x.p.dex, x.p.shiny) + '<div class="sub">' + esc(evT(x.e)[0]) + ' · ' + (evDate(x.e.start) <= now ? 'läuft bis ' + dfmt(evDate(x.e.end)) : 'ab ' + dfmt(evDate(x.e.start))) + '</div></div></a>').join('') + '</div>' : '';
     const cds = upcoming.concat(running).filter(e => e.eventType === 'community-day' && monsOfEvent(e).length);
-    out.innerHTML = fdHtml + (cds.length ? '<h2 class="sub">🌟 Community Day: was entwickeln?</h2>' + cds.map(cdHelp).join('') : '') + '<h2 class="sub">🔴 Läuft gerade (' + running.length + ')</h2><div class="evgrid">' + (running.map(e => evCard(e, now)).join('') || '<div class="empty">Nichts.</div>') + '</div>' +
+    out.innerHTML = aeOverview(running) + fdHtml + (cds.length ? '<h2 class="sub">🌟 Community Day: was entwickeln?</h2>' + aeTips(['spawn', 'incense', 'catch'], 'Abenteuer-Effekte für den Community Day') + cds.map(cdHelp).join('') : '') + '<h2 class="sub">🔴 Läuft gerade (' + running.length + ')</h2><div class="evgrid">' + (running.map(e => evCard(e, now)).join('') || '<div class="empty">Nichts.</div>') + '</div>' +
       '<h2 class="sub">📅 Demnächst (' + upcoming.length + ')</h2><div class="evgrid">' + (upcoming.slice(0, 18).map(e => evCard(e, now)).join('') || '<div class="empty">Nichts.</div>') + '</div>' +
       (undated.length ? '<h2 class="sub">Ohne Datum</h2><div class="evgrid">' + undated.map(e => evCard(e, now)).join('') + '</div>' : '') +
       '<h2 class="sub">🗓 Kalender</h2><div class="panel wide">' + cal + '</div>';
@@ -1261,7 +1261,27 @@
   const memberFromMon = m => { const sp = spOf(m), mvs = [m.fast, m.c1, m.c2].filter(Boolean); const pv = pvIdOf(m), me = metaOf(curFmt().key).find(x => x.id === pv);
     const wpv = Number(m.wp) || (statsOf(m).l ? statsOf(m).cp : 0);
     const info = [ivPct(m) !== null ? ivPct(m) + '% (' + m.iv.join('/') + ')' : '', wpv ? fmt(wpv) + ' WP' : '', mvs.length ? mvs.map(id => mv(id).n).join(' / ') : ''].filter(Boolean).join(' · ');
-    return { key: 'm' + m.uid, label: sp.de + (m.crypto ? ' (Crypto)' : '') + (m.shiny ? ' ✨' : '') + (wpv ? ' ' + fmt(wpv) + ' WP' : '') + (ivPct(m) !== null ? ' ' + ivPct(m) + '%' : ''), info, sp, t: sp.t, pv, m, mt: mvs.length ? mvs.map(id => mv(id).t) : me ? me.ms.map(id => pvMove(id)[1]) : sp.t }; };
+    const rd = pvReady(m, me, curFmt().cp, wpv);
+    return { key: 'm' + m.uid, label: sp.de + (m.crypto ? ' (Crypto)' : '') + (m.shiny ? ' ✨' : '') + (wpv ? ' ' + fmt(wpv) + ' WP' : '') + (ivPct(m) !== null ? ' ' + ivPct(m) + '%' : ''), info: info + (rd.note ? ' · ' + rd.note : ''), rd: rd.q, sp, t: sp.t, pv, m, mt: mvs.length ? mvs.map(id => mv(id).t) : me ? me.ms.map(id => pvMove(id)[1]) : sp.t }; };
+  // Wie PvP-bereit ist ein eigenes Pokémon: Attacken laut Meta (vor allem die Sofortattacke), IVs für die Liga, ausgebaut
+  function pvReady(m, me, cap, wpv) {
+    let mvq = 0.6, note = '', fPen = 1;
+    if (me && me.ms.length) {
+      const have = [m.fast, m.c1, m.c2].filter(Boolean);
+      if (!have.length) { mvq = 0.45; note = 'Attacken nicht eingetragen'; }
+      else {
+        const f = pvFast(me.ms[0]), cs = me.ms.slice(1).map(pvCharged).filter(Boolean);
+        const fOk = !f || m.fast === f, cOk = cs.filter(c => have.includes(c)).length;
+        mvq = (fOk ? 0.6 : 0.1) + 0.4 * (cs.length ? cOk / cs.length : 1);
+        if (!fOk) { note = 'Sofortattacke ' + mv(f).n + ' fehlt'; fPen = 0.6; }
+        else if (cOk < cs.length) note = 'Lade-Attacke fehlt: ' + cs.filter(c => !have.includes(c)).map(c => mv(c).n).join(', ');
+      }
+    }
+    let ivq = 0.7;
+    if (hasIV(m)) { if (cap >= 10000) ivq = ivPct(m) / 100; else { const r = myRank(m, cap); ivq = r ? Math.max(0, r.pct / 100) : 0.7; } }
+    const lvq = !wpv ? 0.6 : cap >= 10000 ? Math.min(1, (statsOf(m).l || 30) / 50) : Math.min(1, wpv / cap);
+    return { q: (mvq * 0.55 + ivq * 0.25 + lvq * 0.2) * fPen, note };
+  }
   const memberFromMeta = x => { const r = pvSp(x.id); if (!r) return null; return { key: 'p' + x.id, label: r.sp.de + (r.shadow ? ' (Crypto)' : '') + ' – hast du nicht', sp: r.sp, t: r.sp.t, pv: x.id, mt: x.ms.map(id => pvMove(id)[1]), meta: x }; };
   const threatOf = x => { const r = pvSp(x.id); return r ? { id: x.id, sp: r.sp, shadow: r.shadow, t: r.sp.t, mt: x.ms.map(id => pvMove(id)[1]), s: x.s } : null; };
   function teamEval(team, l, threats) {
@@ -1272,7 +1292,7 @@
   // Bewertung: Abdeckung der Top-Meta, besonders der Konter der festen Mitglieder (laut PvPoke), Abzug für gemeinsame Schwächen, Stärke der Partner in der Meta.
   function suggestTeams(fixed, pool, l, threats, k) {
     const meta = metaOf(l), idx = {}; meta.forEach((x, i) => { idx[x.id] = i; });
-    const quality = c => { const i = idx[c.pv]; return i === undefined ? 0.4 : Math.max(0.5, meta[i].s / 100) * (i < 60 ? 1 : i < 150 ? 0.92 : 0.82); };
+    const quality = c => { const i = idx[c.pv], base = i === undefined ? 0.4 : Math.max(0.5, meta[i].s / 100) * (i < 60 ? 1 : i < 150 ? 0.92 : 0.82); return base * (c.m ? 0.35 + 0.65 * (c.rd ?? 0.6) : 0.7); };
     // Konter der festen Mitglieder zusätzlich als Gegner aufnehmen und stärker gewichten
     const ths = threats.slice(), W = ths.map(th => th.s / 100);
     fixed.forEach(f => { const e = meta[idx[f.pv]]; (e ? e.lo : []).forEach(id => {
@@ -1307,7 +1327,7 @@
   }
   const buildAround = (anchor, pool, l, threats) => { const s = suggestTeams([anchor], pool, l, threats, 1)[0]; return s ? s.team : [anchor]; };
   window.__pvTest = { buildAround, suggestTeams, metaOf, threatOf, memberFromMon, memberFromMeta, pvp: () => pvp };
-  let pvSugg = null;
+  let pvSugg = null, pvPick = null;
   // Teammitglied anzeigen: bei eigenen Pokémon anklickbar (öffnet es in Meine Pokémon) mit WP, IVs und Attacken
   const memberChip = (c, dim) => c.m ? '<span class="tmem' + (dim ? ' dim' : '') + '" data-detail="' + c.m.uid + '" title="Öffnen">' + img(c.sp, 'mini', c.m.shiny) + '<span><b>' + esc(c.sp.de) + (c.m.crypto ? ' <small>Crypto</small>' : '') + '</b><small>' + esc(c.info || '') + '</small></span></span>'
     : '<span class="tmem' + (dim ? ' dim' : '') + '">' + img(c.sp, 'mini') + '<span><b>' + esc(c.sp.de) + '</b><small>hast du nicht</small></span></span>';
@@ -1346,9 +1366,12 @@
     }).join('');
     // Team-Bauer
     const threats = meta.slice(0, 40).map(threatOf).filter(Boolean);
-    const myPool = state.mons.filter(m => eligible(m, cap)).map(memberFromMon);
+    const myAll = state.mons.filter(m => eligible(m, cap)).map(memberFromMon);
+    // pro Art nur das PvP-bereiteste Exemplar vorschlagen (die anderen bleiben in den Slots auswählbar)
+    const bestOf = {}; myAll.forEach(c => { const k = c.pv || c.sp.k; if (!bestOf[k] || c.rd > bestOf[k].rd) bestOf[k] = c; });
+    const myPool = myAll.slice().sort((a, b) => b.rd - a.rd), mySugg = Object.values(bestOf);
     const metaPool = meta.slice(0, 60).map(memberFromMeta).filter(Boolean).filter(c => !myPool.some(p => p.pv === c.pv));
-    const pool = state.ui.pvOnlyMine === false ? myPool.concat(metaPool) : myPool;
+    const pool = state.ui.pvOnlyMine === false ? mySugg.concat(metaPool) : mySugg;
     const all = myPool.concat(metaPool), byKey = {}; all.forEach(c => { byKey[c.key] = c; });
     state.ui.team = state.ui.team || {}; const tk = state.ui.team[l] || [];
     let team = [0, 1, 2].map(i => byKey[tk[i]] || null);
@@ -1356,8 +1379,23 @@
     const ev = teamEval(team, l, threats);
     const cell = v => v === 0 ? '<td></td>' : '<td class="' + (v >= 1.15 ? 'w' : v <= 0.87 ? 'lo' : 'ev') + '">' + (v >= 1.15 ? '✓' : v <= 0.87 ? '✗' : '≈') + '</td>';
     const covered = ev.filter(r => r.best >= 1.15).length, holes = ev.filter(r => r.best < 0.87 + 0.01 && team.some(Boolean));
-    const teamHtml = '<div class="panel wide"><div class="boss-pick">' + [0, 1, 2].map(slotSel).join('') + '</div>' +
-      '<div class="boss-pick"><button class="btn mini" data-build="1">✨ Vorschläge für die leeren Slots</button><label class="toggle small2"><input type="checkbox" data-pvmine' + (state.ui.pvOnlyMine === false ? '' : ' checked') + '> nur meine Pokémon vorschlagen</label><button class="btn mini" data-clearteam="1">Leeren</button></div></div>' +
+    // Slots als Karten; Klick öffnet die Auswahl darunter
+    const slotCard = i => '<div class="pvslot' + (pvPick === i ? ' on' : '') + '" data-pvslot="' + i + '">' + (team[i] ? memberChip(team[i]).replace('data-detail', 'data-x') + '<button class="tg del" data-pvclear="' + i + '" title="Slot leeren">✕</button>' : '<span class="muted">＋ Slot ' + (i + 1) + ' wählen</span>') + '</div>';
+    const metaIdx = {}; meta.forEach((x, i) => { metaIdx[x.id] = i + 1; });
+    let pickHtml = '';
+    if (pvPick !== null) {
+      const q = (state.ui.pvSearch || '').toLowerCase(), showMeta = !!state.ui.pvPickMeta;
+      const cand = myPool.concat(showMeta ? metaPool : []).filter(c => !q || c.sp.de.toLowerCase().includes(q) || c.sp.en.toLowerCase().includes(q))
+        .map(c => ({ c, r: metaIdx[c.pv] || 999 })).sort((a, b) => ((b.c.rd ?? 0.5) * (b.r < 999 ? 1 : 0.6)) - ((a.c.rd ?? 0.5) * (a.r < 999 ? 1 : 0.6)) || a.r - b.r).slice(0, 80);
+      pickHtml = '<div class="panel wide pvpick"><div class="boss-pick"><b>Slot ' + (pvPick + 1) + ' wählen</b><input type="search" id="pvSearch" placeholder="Name suchen …" value="' + esc(state.ui.pvSearch || '') + '"><label class="toggle small2"><input type="checkbox" data-pvpickmeta' + (showMeta ? ' checked' : '') + '> auch Meta-Pokémon, die ich nicht habe</label><button class="btn mini" data-pvclose="1">Schließen</button></div>' +
+        '<div class="pvcands">' + cand.map(({ c, r }) => {
+          const rd = c.m ? Math.round((c.rd || 0) * 100) : null, lvl = rd === null ? '' : rd >= 80 ? 'ok' : rd >= 60 ? 'mid' : 'low';
+          return '<div class="pvcand" data-pvchoose="' + c.key + '">' + img(c.sp, 'mini', c.m && c.m.shiny) + '<div class="grow"><b>' + esc(c.sp.de) + (c.sp.f ? ' <span class="form">' + esc(c.sp.f) + '</span>' : '') + (c.m && c.m.crypto ? ' <span class="mt cr">Crypto</span>' : '') + '</b>' +
+            '<div class="sub">' + (r < 999 ? 'Meta #' + r + ' · ' : 'nicht in der Meta · ') + esc(c.m ? c.info : 'hast du nicht') + '</div></div>' + (rd !== null ? '<span class="rdy ' + lvl + '" title="PvP-bereit: Attacken, IVs, Level">' + rd + '%</span>' : '') + '</div>';
+        }).join('') + '</div></div>';
+    }
+    const teamHtml = '<div class="panel wide"><div class="pvslots">' + [0, 1, 2].map(slotCard).join('') + '</div>' +
+      '<div class="boss-pick"><button class="btn mini" data-build="1">✨ Vorschläge für die leeren Slots</button><label class="toggle small2"><input type="checkbox" data-pvmine' + (state.ui.pvOnlyMine === false ? '' : ' checked') + '> nur meine Pokémon vorschlagen</label><button class="btn mini" data-clearteam="1">Leeren</button></div></div>' + pickHtml +
       (pvSugg && pvSugg.l === l ? '<div class="panel wide sugg"><b>Vorschläge</b> <span class="muted small2">(fest: ' + pvSugg.fixed.map(esc).join(', ') + ')</span>' + pvSugg.list.map((o, i) => {
         const ev2 = teamEval(o.team, l, threats), cov = ev2.filter(r => r.best >= 1.15).length, hol = ev2.filter(r => r.best < 0.88).map(r => r.th.sp.de);
         return '<div class="srow2"><span class="rk-n">' + (i + 1) + '</span>' + o.team.map(c => memberChip(c, pvSugg.fixed.includes(c.label))).join('') +
@@ -1696,6 +1734,58 @@
   }
 
   window.__sync = { now: () => syncNow(), set: c => { syncCfg = c; saveSync(); } };
+
+  // ---------- Abenteuer-Effekte (Quelle: Pokémon GO Hub, Stand Nov. 2026) ----------
+  // ctx: wann der Effekt sich lohnt → raid, max, megaraid, spawn (Community Day, Rampenlicht usw.), catch, incense, day, night
+  const AE = [
+    { mv: 'BEHEMOTH_BLADE', k: 'ZACIAN_CROWNED_SWORD', dur: 6, cost: '5.000 Sternenstaub + 5 Bonbons', fx: 'Deine Pokémon greifen in Raids und Dyna-Kämpfen stärker an.', when: 'Direkt vor einem schweren Raid oder Dyna-Kampf aktivieren, die 6 Minuten reichen für ein bis zwei Kämpfe.', ctx: ['raid', 'max', 'megaraid'] },
+    { mv: 'BEHEMOTH_BASH', k: 'ZAMAZENTA_CROWNED_SHIELD', dur: 6, cost: '5.000 Sternenstaub + 5 Bonbons', fx: 'Deine Pokémon halten in Raids und Dyna-Kämpfen mehr aus (höhere Verteidigung).', when: 'Vor Dyna-Kämpfen gegen starke Bosse (Gigadynamax) oder wenn ihr wenige seid und viel einstecken müsst.', ctx: ['max', 'raid'] },
+    { mv: 'DYNAMAX_CANNON', k: 'ETERNATUS', dur: 10, cost: '5.000 Sternenstaub + 30 Bonbons', fx: 'Alle Dyna-Attacken eine Stufe höher: freigeschaltete Stufe 3 wird zu Stufe 4, gesperrte werden zu Stufe 1.', when: 'Vor Gigadynamax- und anderen schweren Dyna-Kämpfen. Teuer (30 Bonbons), also gezielt einsetzen.', ctx: ['max'] },
+    { mv: 'DYNAMIC_PUNCH_PLUS', k: 'MEWTWO', mega: 'MEGA_X', dur: 10, cost: '75 Mewtu-Mega-Energie + 5 Bonbons', fx: 'Mehr Schaden gegen Mega-Pokémon in Mega- und Super-Mega-Raids. In Super-Mega-Raids brechen zwei Schilde auf einmal.', when: 'Vor Mega- und Super-Mega-Raids.', ctx: ['megaraid'] },
+    { mv: 'FUTURE_SIGHT_PLUS', k: 'MEWTWO', mega: 'MEGA_Y', dur: 12, cost: '75 Mewtu-Mega-Energie + 5 Bonbons', fx: 'Zeigt dir Begegnungen mit Bewertung ab 3 Sternen, starke Pokémon leuchten beim Antippen.', when: 'Bei Events mit vielen Spawns (Community Day, Rampenlicht-Stunde), wenn du gute IVs suchst.', ctx: ['spawn'] },
+    { mv: 'FREEZE_SHOCK', k: 'KYUREM_BLACK', dur: 10, cost: '5.000 Sternenstaub + 5 Kyurem-Bonbons', fx: 'Pokémon bewegen sich in der Begegnung nicht und sind leichter zu fangen.', when: 'Wenn du viel fängst oder schwer fangbare Pokémon erwartest, z. B. Community Day oder Raid-Fänge.', ctx: ['spawn', 'catch'] },
+    { mv: 'ICE_BURN', k: 'KYUREM_WHITE', dur: 10, cost: '5.000 Sternenstaub + 5 Kyurem-Bonbons', fx: 'Der Fangkreis bewegt sich langsamer, Exzellent-Würfe werden leichter.', when: 'Bei Forschungen mit Exzellent-Würfen, für XP oder beim Fangen nach Raids.', ctx: ['spawn', 'catch'] },
+    { mv: 'ROAR_OF_TIME', k: 'DIALGA_ORIGIN', dur: 6, cost: '5.000 Sternenstaub + 5 Bonbons', fx: 'Pausiert die Zeit von Rauch, Täglichem Abenteuer-Rauch, Glücks-Eiern und Sternenstücken.', when: 'Wenn ein Glücks-Ei, Sternenstück oder Rauch läuft, z. B. beim Entwickeln oder Fangen am Community Day.', ctx: ['incense', 'spawn'] },
+    { mv: 'SPACIAL_REND', k: 'PALKIA_ORIGIN', dur: 10, cost: '5.000 Sternenstaub + 5 Bonbons', fx: 'Du kannst wilde Pokémon aus größerer Entfernung antippen.', when: 'Bei Spawn-Events (Community Day, Rampenlicht-Stunde, Safari), damit du mehr erreichst ohne zu laufen.', ctx: ['spawn'] },
+    { mv: 'SUNSTEEL_STRIKE', k: 'NECROZMA_DUSK_MANE', dur: 10, cost: '3.000 Sternenstaub + 3 Necrozma-Bonbons', fx: 'Lockt Pokémon an, die normalerweise tagsüber erscheinen.', when: 'Abends oder nachts, wenn du tagaktive Pokémon suchst.', ctx: ['night'] },
+    { mv: 'MOONGEIST_BEAM', k: 'NECROZMA_DAWN_WINGS', dur: 10, cost: '3.000 Sternenstaub + 3 Necrozma-Bonbons', fx: 'Lockt Pokémon an, die normalerweise nachts erscheinen.', when: 'Tagsüber, wenn du nachtaktive Pokémon suchst.', ctx: ['day'] }
+  ];
+  const aeName = a => a.mega ? (mv(plusOf(SP.MEWTWO, a.mega, 1)) || {}).n : (mv(a.mv) || {}).n;
+  // Welche eigenen Pokémon haben den Effekt: bereit = kann die Attacke, sonst nur die Art
+  function aeOwners(a) {
+    const own = state.mons.filter(m => m.k === a.k);
+    const ready = own.filter(m => a.mega ? m.mega === a.mega : [m.fast, m.c1, m.c2].includes(a.mv));
+    return { ready, own };
+  }
+  const aeOfMon = m => AE.filter(a => a.k === m.k && (!a.mega || !m.mega || m.mega === a.mega || m.mega === 'none'));
+  function aeMonBox(m) {
+    const list = aeOfMon(m); if (!list.length) return '';
+    return list.map(a => {
+      const ok = a.mega ? m.mega === a.mega : [m.fast, m.c1, m.c2].includes(a.mv);
+      return '<div class="adv ' + (ok ? 'ok' : 'muted2') + '"><b>🌀 Abenteuer-Effekt ' + esc(aeName(a)) + '</b> ' + (ok ? '<span class="muted">(bereit)</span>' : '<span class="muted">(' + (a.mega ? 'braucht ' + (a.mega === 'MEGA_X' ? 'Mega-Mewtu X' : 'Mega-Mewtu Y') + ', oben einstellen' : 'braucht die Attacke ' + esc(aeName(a))) + ')</span>') +
+        '<div class="sub">' + esc(a.fx) + ' ' + a.dur + ' Min. für ' + esc(a.cost) + '.</div><div class="sub"><b>Wann:</b> ' + esc(a.when) + '</div></div>';
+    }).join('');
+  }
+  // Tipp-Box für eine Situation (nur Effekte, die du einsetzen kannst; sonst Hinweis, was dir fehlt)
+  function aeTips(ctxs, title) {
+    const rel = AE.filter(a => a.ctx.some(c => ctxs.includes(c)));
+    const ready = rel.map(a => ({ a, o: aeOwners(a) })).filter(x => x.o.ready.length);
+    if (!ready.length) return '';
+    return '<div class="adv up aetip"><b>🌀 ' + esc(title || 'Abenteuer-Effekt einsetzen') + '</b>' + ready.map(x => '<div class="sub"><b>' + esc(aeName(x.a)) + '</b> (' + esc(x.o.ready[0].mega ? 'Mega-Mewtu' : spOf(x.o.ready[0]).de + (spOf(x.o.ready[0]).f ? ' ' + spOf(x.o.ready[0]).f : '')) + '): ' + esc(x.a.fx) + ' <span class="muted">' + x.a.dur + ' Min., ' + esc(x.a.cost) + '</span></div>').join('') + '</div>';
+  }
+  // Übersicht für News & Events
+  function aeOverview(running) {
+    const spawnNow = running.some(e => ['community-day', 'pokemon-spotlight-hour', 'event', 'wild-area', 'go-tour', 'safari-zone', 'city-safari'].includes(e.eventType));
+    const hr = new Date().getHours(), isNight = hr >= 20 || hr < 6;
+    const rows = AE.map(a => {
+      const o = aeOwners(a), now = (spawnNow && a.ctx.includes('spawn')) || (isNight && a.ctx.includes('night')) || (!isNight && a.ctx.includes('day'));
+      return '<div class="aerow' + (o.ready.length ? '' : ' off') + '"><b>' + esc(aeName(a)) + '</b> <span class="muted small2">' + esc(SP[a.k] ? (a.mega ? (a.mega === 'MEGA_X' ? 'Mega-Mewtu X' : 'Mega-Mewtu Y') : SP[a.k].de + (SP[a.k].f ? ' ' + SP[a.k].f : '')) : a.k) + '</span>' +
+        (o.ready.length ? ' <span class="mt ok2">hast du</span>' : o.own.length ? ' <span class="mt">Attacke fehlt</span>' : '') + (o.ready.length && now ? ' <span class="mt now2">jetzt sinnvoll</span>' : '') +
+        '<div class="sub">' + esc(a.fx) + '</div><div class="sub muted">Wann: ' + esc(a.when) + ' · ' + a.dur + ' Min. für ' + esc(a.cost) + '</div></div>';
+    });
+    return '<details class="panel wide aebox"' + (state.ui.aeOpen ? ' open' : '') + '><summary><b>🌀 Abenteuer-Effekte</b> <span class="muted small2">' + AE.filter(a => aeOwners(a).ready.length).length + ' von ' + AE.length + ' einsetzbar</span></summary>' + rows.join('') + '</details>';
+  }
+
   // ---------- Steuerung ----------
   let current = 'mine';
   function renderAll() {
@@ -1714,7 +1804,7 @@
   const monBy = uid => state.mons.find(m => m.uid === Number(uid));
   function goto(uid) { showDetail(uid); }
   document.addEventListener('click', e => {
-    const t = e.target.closest('[data-synccopy],[data-syncnow],[data-syncoff],[data-syncset],[data-bgreload],[data-scflag],[data-scall],[data-scdel],[data-scsave],[data-scclear],[data-allbg],[data-league],[data-build],[data-usesugg],[data-clearteam],[data-copy],[data-ics],[data-nt],[data-toggle],[data-tagt],[data-tagf],[data-tagdel],[data-evm],[data-evf],[data-evtab],[data-ivset],[data-hundo],[data-pick],[data-add],[data-tog],[data-del],[data-open],[data-goto],[data-detail],[data-mode-set],[data-show2],[data-mf],[data-pf],[data-boss],.card');
+    const t = e.target.closest('[data-pvclear],[data-pvslot],[data-pvclose],[data-pvchoose],[data-synccopy],[data-syncnow],[data-syncoff],[data-syncset],[data-bgreload],[data-scflag],[data-scall],[data-scdel],[data-scsave],[data-scclear],[data-allbg],[data-league],[data-build],[data-usesugg],[data-clearteam],[data-copy],[data-ics],[data-nt],[data-toggle],[data-tagt],[data-tagf],[data-tagdel],[data-evm],[data-evf],[data-evtab],[data-ivset],[data-hundo],[data-pick],[data-add],[data-tog],[data-del],[data-open],[data-goto],[data-detail],[data-mode-set],[data-show2],[data-mf],[data-pf],[data-boss],.card');
     if (!t) return;
     if (t.dataset.pick) { const m = addMon(t.dataset.pick); closePicker(); showDetail(m.uid); return; }
     if (t.dataset.add) { const m = addMon(t.dataset.add, t.dataset.mode); if (t.dataset.crypto) m.crypto = true; save(); showDetail(m.uid); return; }
@@ -1730,6 +1820,11 @@
     if (t.dataset.scclear) { scanRows = []; renderScan(); return; }
     if (t.dataset.allbg) { const m = monBy(t.dataset.allbg); m.allBg = !m.allBg; save(); renderAll(); return; }
     if (t.dataset.league) { state.ui.pvKey = t.dataset.league; save(); loadPvp(); renderPvp(); return; }
+    if (t.dataset.pvclear !== undefined) { const l = curFmt().key, tk = (state.ui.team[l] || []).slice(); tk[Number(t.dataset.pvclear)] = ''; state.ui.team[l] = tk; save(); renderPvp(); return; }
+    if (t.dataset.pvslot !== undefined) { pvPick = pvPick === Number(t.dataset.pvslot) ? null : Number(t.dataset.pvslot); renderPvp(); return; }
+    if (t.dataset.pvclose) { pvPick = null; renderPvp(); return; }
+    if (t.dataset.pvchoose) { const l = curFmt().key; state.ui.team = state.ui.team || {}; const tk = (state.ui.team[l] || []).slice(); tk[pvPick] = t.dataset.pvchoose; state.ui.team[l] = tk;
+      const nx = [0, 1, 2].find(i => !tk[i]); pvPick = nx === undefined ? null : nx; state.ui.pvSearch = ''; save(); renderPvp(); return; }
     if (t.dataset.build) { if (window.__pvBuild) window.__pvBuild(); return; }
     if (t.dataset.usesugg) { if (window.__pvUse) window.__pvUse(Number(t.dataset.usesugg)); return; }
     if (t.dataset.clearteam) { const l = curFmt().key; state.ui.team = state.ui.team || {}; state.ui.team[l] = []; save(); renderPvp(); return; }
@@ -1812,6 +1907,8 @@
   setInterval(() => { loadEvents(); checkNotifs(); }, 60000);
   renderScan();
   setTimeout(() => loadFormats(), 4000);
+  document.addEventListener('input', e => { if (e.target.id === 'pvSearch') { state.ui.pvSearch = e.target.value; renderPvp(); const el = document.getElementById('pvSearch'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } });
+  document.addEventListener('toggle', e => { if (e.target.classList && e.target.classList.contains('aebox')) { state.ui.aeOpen = e.target.open; save(true); } }, true);
   // Sync: beim Start Stand vom Handy/Mac übernehmen, dann regelmäßig und beim Zurückkehren in die App abgleichen
   try { const pre = localStorage.getItem('pokeplaner-remote'); if (pre) { localStorage.removeItem('pokeplaner-remote'); mergeRemote(JSON.parse(pre)); } } catch (e) {}
   renderSyncInfo();
@@ -1845,6 +1942,7 @@
     const d = e.target.dataset || {};
     if (d.slot !== undefined) { const l = curFmt().key; state.ui.team = state.ui.team || {}; const tk = (state.ui.team[l] || []).slice(); tk[Number(d.slot)] = e.target.value; state.ui.team[l] = tk; save(); renderPvp(); }
     if (d.pvmine !== undefined) { state.ui.pvOnlyMine = e.target.checked; save(); renderPvp(); }
+    if (d.pvpickmeta !== undefined) { state.ui.pvPickMeta = e.target.checked; save(true); renderPvp(); }
     if (d.bg !== undefined) { const m = monBy(d.uid); m.bg = e.target.value; save(); renderAll(); }
     if (d.mset) { const m = monBy(d.uid); m[d.mset] = d.mset === 'mlv' ? Number(e.target.value) : e.target.value; if (m.mega && m.mega !== 'none' && Number(m.mlv) === 4 && !superMaxOk(spOf(m), m.mega)) m.mlv = 3; save(); renderAll(); }
   });
