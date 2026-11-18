@@ -1626,7 +1626,7 @@
         let name = (im && im.getAttribute('alt')) || txt.replace(/[A-Z][a-z]{2} \d{1,2}, \d{4}.*$/, '').trim() || m[1];
         seen[m[1]] = 1; list.push({ id: m[1], n: name, img: im ? (im.getAttribute('src') || '') : '', d: date ? new Date(date[1]).getTime() : 0, dex: [] });
       });
-      return fetchBgDetails(list).then(() => { bgData = { v: 2, at: Date.now(), list }; saveBgs(); });
+      return fetchBgDetails(list).then(() => { bgData = { v: 2, at: Date.now(), list, bp: bgData && bgData.bp, bpAt: bgData && bgData.bpAt }; saveBgs(); });
     }).catch(() => {}).then(() => { bgLoading = null; renderAll(); });
   }
   function renderBgProgress() { document.querySelectorAll('.bgprog').forEach(el => { el.textContent = bgLoading ? 'Lade Hintergrund-Liste … ' + bgLoading.done + '/' + (bgLoading.total || '?') : ''; }); }
@@ -1635,9 +1635,55 @@
   // Hintergründe, die bei Dittobase fehlen. Día de Muertos 2026: Duskull und Gigadynamax-Gengar vor Ort in Mexiko-Stadt mit Ortshintergrund (gleiche Ortskarte wie City Safari 2023)
   const BG_ADD = [{ id: 'x-wcs-2026-twitch-tinkaton', n: 'Weltmeister-Granforgita (Twitch-Drop WM 2026)', d: new Date('2026-08-28').getTime(), dex: [959], imgFrom: 'lc-wcs-2026-san-francisco' },
     { id: 'x-dia-de-muertos-2026-cdmx', n: 'Día de Muertos 2026 Mexico City (Ort)', d: new Date('2026-10-31').getTime(), dex: [94, 355], imgFrom: 'lc-city-safari-2023-mexico-city' }];
+  // Zweite Quelle: Bulbapedia-Tabelle „Background (GO)“ (Orts- und Spezial-Hintergründe mit allen möglichen Pokémon)
+  const BULBA = 'https://bulbapedia.bulbagarden.net/wiki/Background_(GO)';
+  const EN2DEX = {}; DB.forEach(sp => { const k = sp.en.toLowerCase(); if (!EN2DEX[k]) EN2DEX[k] = sp.dex; });
+  function loadBulba(force) {
+    if (!window.rhNet || window.rhNet.web || !bgData) return;
+    if (!force && bgData.bpAt && Date.now() - bgData.bpAt < 3 * 864e5) return;
+    window.rhNet.get(BULBA).then(r => {
+      if (!r || !r.ok) return;
+      const doc = new DOMParser().parseFromString(r.text, 'text/html'), out = [];
+      doc.querySelectorAll('table').forEach(tb => {
+        if (![...tb.querySelectorAll('th')].some(th => /pok[eé]mon/i.test(th.textContent))) return;
+        let last = null;
+        tb.querySelectorAll('tr').forEach(tr => {
+          const cells = [...tr.children]; if (!cells.length || cells.every(c => c.tagName === 'TH')) return;
+          const dex = new Set();
+          tr.querySelectorAll('a[href*="_(Pok%C3%A9mon)"], a[href*="_(Pokémon)"]').forEach(a => {
+            const nm = decodeURIComponent((a.getAttribute('href') || '').replace(/^.*\/wiki\//, '')).replace(/_\(Pokémon\)$/, '').replace(/_/g, ' ').toLowerCase();
+            if (EN2DEX[nm]) dex.add(EN2DEX[nm]);
+          });
+          if (!dex.size) return;
+          const full = cells.length >= 3 && !cells[0].querySelector('a[href*="_(Pok"]');
+          const name = full ? cells[0].textContent.replace(/\s+/g, ' ').trim() : (last && last.n);
+          if (!name) return;
+          const yr = /(20\d\d)/.exec(cells[cells.length - 1].textContent) || /(20\d\d)/.exec(tr.textContent);
+          if (full || !last) { last = { n: name, dex: [...dex], y: yr ? Number(yr[1]) : 0 }; out.push(last); }
+          else dex.forEach(d => { if (!last.dex.includes(d)) last.dex.push(d); });
+        });
+      });
+      if (out.length) { bgData.bp = out; bgData.bpAt = Date.now(); saveBgs(); renderAll(); }
+    }).catch(() => {});
+  }
+  const bgTok = n => String(n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w && !/^(go|pokemon|background|special|the|of|and|20\d\d)$/.test(w));
+  let bgMerged = null, bgMergedKey = '';
   function bgList() {
     if (!bgData || !bgData.list) return [];
-    return bgData.list.concat(BG_ADD.map(x => Object.assign({ img: ((bgData.list.find(b => b.id === x.imgFrom) || {}).img) || '' }, x)));
+    const key = bgData.at + '|' + (bgData.bpAt || 0) + '|' + (bgData.retry || 0) + '|' + bgData.list.reduce((a, b) => a + b.dex.length, 0);
+    if (bgMerged && bgMergedKey === key) return bgMerged;
+    const base = bgData.list.map(b => Object.assign({}, b, { dex: b.dex.slice() })).concat(BG_ADD.map(x => Object.assign({ img: ((bgData.list.find(b => b.id === x.imgFrom) || {}).img) || '' }, x, { dex: x.dex.slice() })));
+    (bgData.bp || []).forEach((e, i) => {
+      const t = bgTok(e.n); if (!t.length) return;
+      const yr = b => b.d ? new Date(b.d).getFullYear() : 0;
+      // gleiche Wörter im Namen (und gleiches Jahr, wenn bekannt) = gleicher Hintergrund, dann Pokémon ergänzen
+      const hit = base.find(b => { const bt = bgTok(b.n); return t.every(w => bt.includes(w)) && (!e.y || !yr(b) || Math.abs(e.y - yr(b)) <= 1); });
+      if (hit) { e.dex.forEach(d => { if (!hit.dex.includes(d)) hit.dex.push(d); }); return; }
+      // schon von Hand eingetragen (gleiche Pokémon, gleiches Jahr)? dann nicht doppelt
+      if (base.some(b => b.id.startsWith('x-') && yr(b) === e.y && e.dex.every(d => b.dex.includes(d)))) return;
+      base.push({ id: 'bp-' + i + '-' + t.join('-').slice(0, 40), n: e.n + ' (Bulbapedia)', d: e.y ? new Date(e.y + '-07-01').getTime() : 0, dex: e.dex.slice(), img: '' });
+    });
+    bgMergedKey = key; return (bgMerged = base);
   }
   const famDex = sp => [...new Set(DB.filter(x => x.fam === sp.fam).map(x => x.dex))];
   function bgsFor(sp) {
@@ -1645,7 +1691,7 @@
     const fd = famDex(sp);
     return bgList().filter(b => b.dex.concat(BG_EXTRA[b.id] || []).some(d => fd.includes(d))).sort((a, b) => b.d - a.d);
   }
-  const bgById = id => bgList().find(b => b.id === id) || (LCBY[id] ? { id, n: LCBY[id].n, img: LCBY[id].img ? LCIMG(LCBY[id]) : '' } : null);
+  const bgById = id => bgList().find(b => b.id === id) || (bgData && (bgData.list || []).find(b => b.id === id)) || (LCBY[id] ? { id, n: LCBY[id].n, img: LCBY[id].img ? LCIMG(LCBY[id]) : '' } : null);
   function bgBlock(m) {
     const sp = spOf(m), cur = m.bg ? bgById(m.bg) : null;
     if (!window.rhNet) return '';
@@ -1987,7 +2033,7 @@
     if (t.dataset.syncoff) { syncCfg = {}; saveSync(); renderSyncInfo(); return; }
     if (t.dataset.syncset) { const v = (($('#syncToken') || {}).value || '').trim(); if (!v) return; const [tok, gid] = v.split('.'); if (gid) syncCfg.gist = gid; syncSetup(tok); return; }
     if (t.dataset.synccopy) { navigator.clipboard.writeText(syncCfg.token + '.' + syncCfg.gist).then(() => { t.textContent = '✔ Kopiert'; setTimeout(() => { t.textContent = 'Verbindungscode kopieren'; }, 2500); }).catch(() => {}); return; }
-    if (t.dataset.bgreload) { loadBackgrounds(true); renderAll(); return; }
+    if (t.dataset.bgreload) { loadBackgrounds(true); loadBulba(true); renderAll(); return; }
     if (t.dataset.scflag) { const r = scanRows.find(x => x.id === Number(t.dataset.sid)); if (r) { r[t.dataset.scflag] = !r[t.dataset.scflag]; renderScan(); } return; }
     if (t.dataset.scall) { const k = t.dataset.scall, on = !scanRows.every(r => r[k]); scanRows.forEach(r => { r[k] = on; }); renderScan(); return; }
     if (t.dataset.scdel) { scanRows = scanRows.filter(r => r.id !== Number(t.dataset.scdel)); renderScan(); return; }
@@ -2085,7 +2131,7 @@
   renderScan();
   setTimeout(() => loadFormats(), 4000);
   // Hintergrund-Liste regelmäßig auffrischen (nur am Mac, das Handy bekommt sie über den Abgleich)
-  if (window.rhNet && !window.rhNet.web) { setTimeout(() => loadBackgrounds(), 20000); setInterval(() => loadBackgrounds(), 12 * 3600e3); }
+  if (window.rhNet && !window.rhNet.web) { setTimeout(() => loadBackgrounds(), 20000); setTimeout(() => loadBulba(), 30000); setInterval(() => { loadBackgrounds(); loadBulba(); }, 12 * 3600e3); }
   setTimeout(preloadMeta, 12000); setInterval(preloadMeta, 6 * 3600e3);
   document.addEventListener('input', e => { if (e.target.id === 'pvSearch') { state.ui.pvSearch = e.target.value; renderPvp(); const el = document.getElementById('pvSearch'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } });
   document.addEventListener('toggle', e => { if (e.target.classList && e.target.classList.contains('aebox')) { state.ui.aeOpen = e.target.open; save(true); } }, true);
@@ -2158,7 +2204,7 @@
     else { b.dataset.confirm = '1'; b.textContent = 'Wirklich? Nochmal klicken'; setTimeout(() => { b.textContent = 'Alles zurücksetzen'; delete b.dataset.confirm; }, 3000); }
   });
 
-  window.__rh = { addMon, statsOf, bestRaidSet, bestMaxFast, raidScore, maxDmg, plan, roleOf, levelCost, importCSV, pickTeam, mapLive, state: () => state, SP, BV, renderAll, show, showDetail, MAXCANDS };
+  window.__rh = { loadBulba, bgList, bgsFor, addMon, statsOf, bestRaidSet, bestMaxFast, raidScore, maxDmg, plan, roleOf, levelCost, importCSV, pickTeam, mapLive, state: () => state, SP, BV, renderAll, show, showDetail, MAXCANDS };
   save();
   show('mine');
 })();
