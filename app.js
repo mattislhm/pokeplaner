@@ -1255,8 +1255,10 @@
       const c = lv[best][1], prod = (b[0] + a) * c * (b[1] + d) * c * Math.floor((b[2] + s2) * c);
       rows.push({ k: a * 256 + d * 16 + s2, prod, l: lv[best][0], cp: Math.max(10, Math.floor((b[0] + a) * Math.sqrt(b[1] + d) * Math.sqrt(b[2] + s2) * c * c / 10)) });
     }
-    rows.sort((x, y) => y.prod - x.prod);
-    const map = {}; rows.forEach((r, i) => { map[r.k] = { rank: i + 1, pct: r.prod / rows[0].prod * 100, l: r.l, cp: r.cp }; });
+    // gleiches Werteprodukt = gleicher Platz (z. B. 15/15/15 und 15/15/14 haben oft gleich viele KP)
+    rows.sort((x, y) => (y.prod - x.prod) || (((y.k >> 8) + ((y.k >> 4) & 15) + (y.k & 15)) - ((x.k >> 8) + ((x.k >> 4) & 15) + (x.k & 15))));
+    const map = {}; let rk = 1;
+    rows.forEach((r, i) => { if (i && r.prod < rows[i - 1].prod - 1e-6) rk = i + 1; map[r.k] = { rank: rk, pct: r.prod / rows[0].prod * 100, l: r.l, cp: r.cp }; });
     return (rankCache[key] = { map, top: rows[0] });
   }
   function myRank(m, cap) {
@@ -1360,7 +1362,7 @@
     return out.map(r => ({ team: fixed.concat(r.add), pct: Math.round(r.sc / top * 100) }));
   }
   const buildAround = (anchor, pool, l, threats) => { const s = suggestTeams([anchor], pool, l, threats, 1)[0]; return s ? s.team : [anchor]; };
-  window.__pvTest = { buildAround, suggestTeams, metaOf, threatOf, memberFromMon, memberFromMeta, pvp: () => pvp };
+  window.__pvTest = { myRank, buildAround, suggestTeams, metaOf, threatOf, memberFromMon, memberFromMeta, pvp: () => pvp };
   let pvSugg = null, pvPick = null;
   // Teammitglied anzeigen: bei eigenen Pokémon anklickbar (öffnet es in Meine Pokémon) mit WP, IVs und Attacken
   const memberChip = (c, dim) => c.m ? '<span class="tmem' + (dim ? ' dim' : '') + '" data-detail="' + c.m.uid + '" title="Öffnen">' + img(c.sp, 'mini', c.m.shiny) + '<span><b>' + esc(c.sp.de) + (c.m.crypto ? ' <small>Crypto</small>' : '') + '</b><small>' + esc(c.info || '') + '</small></span></span>'
