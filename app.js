@@ -1658,7 +1658,9 @@
     if (syncAgain) { syncAgain = false; syncSoon(); }
   }
   async function syncSetup(token) {
-    syncCfg.token = token.trim(); syncCfg.err = ''; renderSyncInfo('Verbinde …');
+    // Verbindungscode „Schlüssel.GistID“ oder nur der Schlüssel
+    const [tok, gid] = String(token).trim().split('.'); if (gid) syncCfg.gist = gid;
+    syncCfg.token = tok; syncCfg.err = ''; renderSyncInfo('Verbinde …');
     try {
       if (!syncCfg.gist) {
         // vorhandenen PokéPlaner-Gist suchen, sonst neu anlegen (privat)
@@ -1674,7 +1676,7 @@
     const link = syncOn() ? WEBURL + '#sync=' + encodeURIComponent(syncCfg.token + '.' + syncCfg.gist) : '';
     let qr = '';
     if (link && !window.PP_WEB && window.qrcode) { try { const q = qrcode(0, 'L'); q.addData(link); q.make(); qr = q.createSvgTag(4, 8); } catch (e) {} }
-    el.innerHTML = (msg ? '<p class="muted small">' + esc(msg) + '</p>' : '') +
+    el.innerHTML = (msg ? '<p class="muted small">' + esc(msg) + '</p>' : '') + (!syncOn() && syncCfg.err ? '<p class="small" style="color:#ff8a8a">⚠ Verbinden hat nicht geklappt: ' + esc(syncCfg.err) + '</p>' : '') +
       (syncOn() ? '<p class="small">' + (syncCfg.err ? '⚠ ' + esc(syncCfg.err) : syncCfg.last ? '✔ Zuletzt abgeglichen ' + new Date(syncCfg.last).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' }) : 'Verbunden, gleich wird abgeglichen …') + '</p>' +
         '<div class="btns"><button class="btn" data-syncnow="1">Jetzt abgleichen</button><button class="btn danger" data-syncoff="1">Trennen</button></div>' +
         (window.PP_WEB ? '' : '<p class="muted small" style="margin-top:10px"><b>Handy verbinden:</b> Auf „Verbindungscode kopieren“ klicken, am iPhone die PokéPlaner-App vom Home-Bildschirm öffnen, Einstellungen → Code einfügen → Verbinden. (Die Zwischenablage geht vom Mac aufs iPhone rüber, wenn beide mit deiner Apple-ID angemeldet sind.) Oder den QR-Code scannen, das verbindet aber nur Safari, nicht die App auf dem Home-Bildschirm. Code und QR-Code enthalten deinen Schlüssel, also nicht weitergeben.</p>' +
