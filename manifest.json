@@ -1,0 +1,2 @@
+{ "name": "PokéPlaner", "short_name": "PokéPlaner", "start_url": "./", "scope": "./", "display": "standalone", "background_color": "#14151b", "theme_color": "#14151b",
+  "icons": [ { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" }, { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" } ] }

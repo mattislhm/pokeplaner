@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; img-src 'self' data: blob: https:; connect-src 'self' data: blob: https://raw.githubusercontent.com https://api.github.com https://gist.githubusercontent.com https://*.githubusercontent.com">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PokéPlaner">
+<meta name="theme-color" content="#14151b">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>PokéPlaner</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="drag"></div>
+    <div class="brand">
+      <div class="logo">PP</div>
+      <div>
+        <div class="brand-title">PokéPlaner</div>
+        <div class="brand-sub">Pokémon GO</div>
+      </div>
+    </div>
+    <nav><button class="nav active" data-view="mine">Meine Pokémon</button><button class="nav" data-view="cleanup">Aufräumen</button><button class="nav" data-view="events">News &amp; Events</button></nav>
+    <div class="cat">
+      <div class="cat-h">Dyna-Kämpfe</div>
+      <nav>
+        <button class="nav" data-view="overview">Übersicht</button>
+        <button class="nav" data-view="team">Team-Planer</button>
+        <button class="nav" data-view="ranking">Rangliste</button>
+      </nav>
+    </div>
+    <div class="cat">
+      <div class="cat-h">PvP</div>
+      <nav><button class="nav" data-view="pvp">Kampfliga</button></nav>
+    </div>
+    <div class="cat">
+      <div class="cat-h">Raids</div>
+      <nav>
+        <button class="nav" data-view="raids">Team-Planer</button>
+        <button class="nav" data-view="rranking">Rangliste</button>
+      </nav>
+    </div>
+    <nav class="bottom-nav"><button class="nav" data-view="settings">Einstellungen</button></nav>
+    <div class="side-stats" id="sideStats"></div>
+  </aside>
+
+  <main class="main">
+    <div class="drag top"></div>
+
+    <section class="view" id="view-cleanup">
+      <header class="vh"><h1>Aufräumen</h1><p class="muted">Doppelte Pokémon: was du behalten solltest und was weg kann. Shinys, Glücks-Pokémon, Hundos, Dyna, Favoriten und markierte bleiben immer.</p></header>
+      <div id="cleanOut"></div>
+    </section>
+
+    <section class="view" id="view-pvp">
+      <header class="vh row">
+        <div>
+          <h1>PvP: GO-Kampfliga</h1>
+          <p class="muted">Aktuelle Meta für alle Ligen und Cups, deine IV-Ränge und ein Team-Bauer. Lädt sich täglich neu. 🟢 = gerade in der GO-Kampfliga.</p>
+        </div>
+        <div class="tools"><span class="muted small2" id="pvpStamp"></span><select id="pvpType"><option value="">Alle Typen</option><option>Normal</option><option>Kampf</option><option>Flug</option><option>Gift</option><option>Boden</option><option>Gestein</option><option>Käfer</option><option>Geist</option><option>Stahl</option><option>Feuer</option><option>Wasser</option><option>Pflanze</option><option>Elektro</option><option>Psycho</option><option>Eis</option><option>Drache</option><option>Unlicht</option><option>Fee</option></select><button class="btn mini" id="pvpReload">↻</button></div>
+      </header>
+      <div class="chips"><button class="chip" data-league="all|1500">Superliga (1500)</button><button class="chip" data-league="all|2500">Hyperliga (2500)</button><button class="chip" data-league="all|10000">Meisterliga</button><select id="cupSel"></select></div>
+      <div id="pvpOut"></div>
+    </section>
+
+    <section class="view" id="view-events">
+      <header class="vh row">
+        <div>
+          <h1>News &amp; Events</h1>
+          <p class="muted">Alle Events weltweit, laufend und kommend, plus Kalender. Klick öffnet die Seite im Browser.</p>
+        </div>
+        <div class="tools"><span class="muted small2" id="evStamp"></span><button class="btn mini" id="evReload">↻ Neu laden</button></div>
+      </header>
+      <div class="chips"><button class="chip" data-evtab="events">📅 Events</button><button class="chip" data-evtab="news">📰 News</button><button class="chip" data-evtab="eggs">🥚 Eier</button><button class="chip" data-evtab="research">📋 Feldforschung</button></div>
+      <div class="chips" id="evChips"></div>
+      <div id="evOut"></div>
+    </section>
+
+    <section class="view" id="view-overview">
+      <header class="vh">
+        <h1>Übersicht</h1>
+        <p class="muted">Was du ausbauen und was du als Nächstes holen solltest.</p>
+      </header>
+      <div id="emptyHint"></div>
+      <div class="hero" id="hero"></div>
+      <div class="two">
+        <div><h2 class="sub">⚔ Angreifer ausbauen</h2><div id="planAtt" class="plan"></div></div>
+        <div><h2 class="sub">🛡 Tanks &amp; Heiler ausbauen</h2><div id="planTank" class="plan"></div></div>
+      </div>
+      <h2 class="sub">⭐ Als Nächstes holen</h2>
+      <div id="wantList" class="want"></div>
+      <h2 class="sub">Alle Typen</h2>
+      <div class="cards" id="overviewCards"></div>
+      <p class="muted small foot">Ausbau-Reihenfolge: Level 30, wichtigster Dyna-Attacke auf Level 2, Level 40, wichtigster Dyna-Attacke auf Level 3, danach die anderen Dyna-Attacken (Empfehlung aus der Community, r/TheSilphRoad). Wichtigster Dyna-Attacke: Angreifer Max Attack, Tanks Max Guard, Heiler Max Spirit (GO Hub). Kosten sind Standardwerte; bei Legendären können es mehr Bonbons sein, Zacian und Zamazenta brauchen Sternenstaub statt Dyna-Partikel. Bilder werden aus dem Internet geladen.</p>
+    </section>
+
+    <section class="view active" id="view-mine">
+      <header class="vh row">
+        <div>
+          <h1>Meine Pokémon</h1>
+          <p class="muted">Klick auf ein Pokémon klappt es auf. Mehrere bleiben offen, so kannst du vergleichen.</p>
+        </div>
+        <div class="tools">
+          <label class="btn">📸 Screenshots<input type="file" id="scanFile" accept="image/*" multiple hidden></label>
+          <label class="btn">⬆ CSV (Poke Genie)<input type="file" id="importFile" accept=".csv,.txt" hidden></label>
+          <button class="btn primary" id="addBtn">＋ Pokémon hinzufügen</button>
+        </div>
+      </header>
+      <div id="importMsg"></div>
+      <div id="scanBox"></div>
+      <div class="filterbar">
+        <input id="mineSearch" type="search" placeholder="Suchen…">
+        <select id="mineType"></select>
+        <select id="mineMode"><option value="">Alle Modi</option><option value="n">Normal</option><option value="max">Dynamax + G-Max</option><option value="d">Dynamax</option><option value="g">Gigadynamax</option></select>
+        <select id="mineSort"><option value="cp" selected>Sortieren: WP</option><option value="iv">Sortieren: IV</option><option value="new">Sortieren: Hinzugefügt</option><option value="name">Sortieren: Name</option><option value="dex">Sortieren: Pokédex-Nr.</option></select><button class="btn mini sortdir" id="mineDir" title="Reihenfolge umdrehen">↓ absteigend</button>
+        <span class="muted small2" id="mineCount"></span>
+        <span class="muted small2" id="openCount"></span>
+        <button class="btn mini" id="closeAll">Alle zuklappen</button>
+      </div>
+      <div class="chips" id="mineChips"></div>
+      <div class="chips"><span id="tagChips" class="chips inl"></span><input id="tagAdd" class="tagin" placeholder="＋ eigene Markierung, Enter"></div>
+      <div id="mineList"></div>
+    </section>
+
+    <section class="view" id="view-team">
+      <header class="vh">
+        <h1>Dyna-Kämpfe: Team-Planer</h1>
+        <p class="muted">Boss wählen, dann bekommst du dein bestes Team aus deinen Dynamax-/G-Max-Pokémon. Favoriten (★) werden bevorzugt.</p>
+      </header>
+      <div class="panel wide">
+        <div class="boss-pick">
+          <label>Boss <select id="bossSel"></select></label>
+          <span class="or">oder Typen</span><select id="bossT1"></select><select id="bossT2"></select>
+        </div>
+        <div class="boss-pick">
+          <select id="bossF"></select><select id="bossC"></select><select id="bossW"></select>
+        </div>
+      </div>
+      <div id="teamOut"></div>
+    </section>
+
+    <section class="view" id="view-ranking">
+      <header class="vh row">
+        <div>
+          <h1>Rangliste</h1>
+          <p class="muted">Die stärksten Angreifer pro Typ und die besten Tanks. Mit ＋ direkt zu deinen Pokémon hinzufügen.</p>
+        </div>
+        <div class="tools"><select id="rankType"></select></div>
+      </header>
+      <div id="rankList"></div>
+    </section>
+
+    <section class="view" id="view-raids">
+      <header class="vh">
+        <h1>Raids: Team-Planer</h1>
+        <p class="muted">Boss wählen (oder unten einen aktuellen anklicken). Du bekommst deine besten 6 mit deinen Attacken, inklusive Mega/Proto und Wetter.</p>
+      </header>
+      <div class="panel wide">
+        <div class="field"><span>Aktuelle Raid-Bosse</span> <button class="btn mini" id="liveReload">↻</button></div>
+        <div id="liveBosses"></div>
+      </div>
+      <div class="panel wide">
+        <div class="boss-pick">
+          <label>Boss <select id="rbossSel"></select></label>
+          <span class="or">oder Typen</span><select id="rbossT1"></select><select id="rbossT2"></select>
+        </div>
+        <div class="boss-pick">
+          <select id="rbossF"></select><select id="rbossC"></select><select id="rbossW"></select>
+        </div>
+      </div>
+      <div id="raidOut"></div>
+    </section>
+
+    <section class="view" id="view-rranking">
+      <header class="vh row">
+        <div>
+          <h1>Raids: Rangliste</h1>
+          <p class="muted">Stärkste Angreifer pro Typ (Schnell- und Lade-Attacke vom gleichen Typ, Lv 40, 15/15/15).</p>
+        </div>
+        <div class="tools"><label class="toggle"><input type="checkbox" id="rrMega" checked> Mega/Proto</label><label class="toggle"><input type="checkbox" id="rrCrypto" checked> Crypto</label><select id="rrankType"></select></div>
+      </header>
+      <div id="rrankList"></div>
+    </section>
+
+    <section class="view" id="view-settings">
+      <header class="vh"><h1>Einstellungen</h1></header>
+      <div class="panel">
+        <label class="field"><span>Toleranz in %</span><input type="number" id="tol" min="0" max="50" step="1"></label>
+        <p class="muted small">Ein Shiny oder eine Alternative zählt als gleichwertig, wenn es höchstens so viel Prozent weniger Schaden macht. Ein Upgrade wird erst ab mehr als so viel Prozent mehr Schaden vorgeschlagen.</p>
+      </div>
+      <div class="panel">
+        <div class="field"><span>Sicherung</span></div>
+        <div class="btns">
+          <button class="btn" id="exportBtn">Daten exportieren</button>
+          <label class="btn">Sicherung laden<input type="file" id="restoreFile" accept=".json" hidden></label>
+          <button class="btn danger" id="resetBtn">Alles zurücksetzen</button>
+        </div>
+        <p class="muted small">Deine Pokémon werden automatisch auf diesem Mac gespeichert.</p>
+      </div>
+      <div class="panel">
+        <div class="field"><span>📱 Mac und Handy abgleichen</span></div>
+        <div id="syncBox"></div>
+      </div>
+      <div class="panel maconly">
+        <div class="field"><span>Mitteilungen am Mac</span></div>
+        <div id="notifSet"></div>
+      </div>
+      <div class="panel">
+        <div class="field"><span>Mitteilungen aufs Handy (Kalender-Abo)</span></div>
+        <p class="muted small">Klick auf eine Event-Art: der Mac-Kalender fragt, ob du sie abonnieren willst. Wähl dort als Ort <b>iCloud</b> und stell eine Erinnerung ein, dann kommt alles automatisch auf dein iPhone und aktualisiert sich selbst. Quelle: GO Calendar (Daten von LeekDuck).</p>
+        <div class="chips" id="subsList"></div>
+      </div>
+      <div class="panel maconly">
+        <div class="field"><span>Automatische Sicherung</span></div>
+        <p class="muted small" id="backupInfo"></p>
+        <p class="muted small">Bei jeder Änderung wird deine Liste in iCloud Drive gesichert (Ordner „PokéPlaner“, die letzten 30 Tage). Zum Zurückholen: unten „Sicherung laden“ und die Datei aus dem Ordner wählen.</p>
+        <div class="btns"><button class="btn" id="backupOpen">Ordner öffnen</button></div>
+      </div>
+      <div class="panel">
+        <div class="field"><span>Quellen für News &amp; Events</span></div>
+        <div id="srcList"></div>
+        <p class="muted small">Zum Nachlesen im Browser:</p>
+        <div class="btns"><a class="btn" href="https://leekduck.com/events/" target="_blank">LeekDuck</a><a class="btn" href="https://pokemongo.com/de/news" target="_blank">Offizielle News</a><a class="btn" href="https://pokemongohub.net/" target="_blank">GO Hub</a><a class="btn" href="https://www.serebii.net/pokemongo/" target="_blank">Serebii</a><a class="btn" href="https://www.pokewiki.de/Events_(Pok%C3%A9mon_GO)" target="_blank">PokéWiki</a><a class="btn" href="https://www.reddit.com/r/TheSilphRoad/" target="_blank">r/TheSilphRoad</a></div>
+      </div>
+      <div class="panel">
+        <div class="field"><span>So wird gerankt</span></div>
+        <p class="muted small">Import: CSV-Export aus Poke Genie oder Calcy IV (Spalten werden am Namen erkannt, deutsch oder englisch). Aktuelle Raid-Bosse: LeekDuck über ScrapedDuck, wird alle 3 Stunden neu geladen. Wetter-Boost ×1,2, Mega im Team ×1,3 für gleichen Typ und ×1,1 für alles andere (nicht für die Mega selbst). Kosten aus dem Game Master: Glück halber Sternenstaub, Crypto ×1,2, Erlöst ×0,9. Daten aus dem Game Master von Pokémon GO (PokeMiners, Stand 16.11.2026): Werte, Typen, alle Attacken und welche nur per Elite-TM gehen. Namen aus den offiziellen Spieltexten (Pokémon deutsch, Attacken englisch). Dynamax/Gigadynamax-Liste: Bulbapedia. Dyna-Kämpfe: Dyna-Attacke-Stärke 250/300/350, G-Max und Endynalos 350/400/450; bei Dynamax bestimmt der Typ der Schnell-Attacke den Dyna-Attacke, bei Gigadynamax ist der G-Dyna-Attacke fest. Tanks: Verteidigung × KP, Heiteira = 100. Raids: DPS aus Schnell-/Lade-Zyklus gegen den Boss, Gesamtwert aus DPS und Haltbarkeit (wie bei GamePress), ohne Wetter und Ausweichen. Typ-Effektivität 1,6× / 0,625× / 0,39×. Bilder: PokeAPI.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal" id="picker" hidden>
+  <div class="modal-box">
+    <div class="modal-h">
+      <input id="pickSearch" type="search" placeholder="Name, Typ oder #Nr…" autocomplete="off">
+      <select id="pickType"></select>
+      <span class="muted small2" id="pickCount"></span>
+      <button class="btn" id="pickClose">Schließen</button>
+    </div>
+    <div class="chips" id="pickChips"></div>
+    <div id="pickList" class="pick"></div>
+  </div>
+</div>
+
+<div class="modal" id="detail" hidden>
+  <div class="modal-box narrow">
+    <div class="modal-h"><b>Details</b><button class="btn" id="detailClose">Schließen</button></div>
+    <div id="detailBody"></div>
+  </div>
+</div>
+
+<script src="shim.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="data.js"></script>
+<script src="data_pvp.js"></script>
+<script src="data_pool.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
