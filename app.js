@@ -1676,15 +1676,28 @@
   function analyzePixels(im) {
     const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
     const g = c.getContext('2d'); g.drawImage(im, 0, 0);
-    const f = c.width / SC.w, px = (x, y) => g.getImageData(Math.round(x * f), Math.round(y * f), 1, 1).data;
-    const iv = SC.bars.map(y => { let fill = null; for (let x = SC.barX[0]; x <= SC.barX[1] + 2; x++) { const p = px(x, y); if (p[0] > 200 && p[0] - p[2] > 60) fill = x; } return fill === null ? 0 : Math.max(0, Math.min(15, Math.round((fill - SC.barX[0]) / (SC.barX[1] - SC.barX[0]) * 15))); });
+    const f = c.width / SC.w, D = g.getImageData(0, 0, c.width, c.height).data;
+    const px = (x, y) => { const i = (Math.round(y * f) * c.width + Math.round(x * f)) * 4; return [D[i], D[i + 1], D[i + 2]]; };
+    // Balken suchen statt feste Höhe: je nach Länge des Fang-Textes rutscht die Bewertung hoch oder runter
+    const isBar = p => (p[0] > 200 && p[0] - p[2] > 60) || (Math.abs(p[0] - p[1]) < 8 && p[0] >= 212 && p[0] <= 242 && Math.abs(p[2] - p[0]) < 10);
+    const xs = Array.from({ length: 12 }, (_, i) => SC.barX[0] + 8 + (SC.barX[1] - SC.barX[0] - 16) * i / 11);
+    const H = c.height / f, groups = [];
+    for (let y = 1300; y < Math.min(H - 20, 2500); y += 1) {
+      if (!xs.every(x => isBar(px(x, y)))) continue;
+      const lastG = groups[groups.length - 1];
+      if (lastG && y - lastG[1] <= 2) lastG[1] = y; else groups.push([y, y]);
+    }
+    const found = groups.filter(gr => gr[1] - gr[0] >= 10).map(gr => (gr[0] + gr[1]) / 2);
+    const barsOk = found.length >= 3;
+    const bars = barsOk ? found.slice(-3) : SC.bars;
+    const iv = bars.map(y => { let fill = null; for (let x = SC.barX[0]; x <= SC.barX[1] + 2; x++) { const p = px(x, y); if (p[0] > 200 && p[0] - p[2] > 60) fill = x; } return fill === null ? 0 : Math.max(0, Math.min(15, Math.round((fill - SC.barX[0]) / (SC.barX[1] - SC.barX[0]) * 15))); });
     const st = px(SC.star[0], SC.star[1]), fav = st[0] > 200 && st[1] > 140 && st[2] < 90;
     let dyna = 0, giga = 0;
     for (let y = 1550; y < 1800; y += 3) for (let x = 388; x < 484; x += 4) { const p = px(x, y); if (Math.abs(p[0] - 73) < 12 && Math.abs(p[1] - 58) < 12 && Math.abs(p[2] - 124) < 12) dyna++; if (Math.abs(p[0] - 44) < 12 && Math.abs(p[1] - 62) < 12 && Math.abs(p[2] - 112) < 12) giga++; }
     const th = document.createElement('canvas'); th.width = 90; th.height = Math.round(90 * c.height / c.width * 0.35);
     th.getContext('2d').drawImage(c, 0, 0, c.width, c.height * 0.35, 0, 0, th.width, th.height);
     const rects = {}; Object.keys(SC.rects).forEach(k => { const r = SC.rects[k]; rects[k] = { left: Math.round(r[0] * f), top: Math.round(r[1] * f), width: Math.round(r[2] * f), height: Math.round(r[3] * f) }; });
-    return { iv, fav, mode: giga > 40 ? 'g' : dyna > 40 ? 'd' : 'n', thumb: th.toDataURL('image/jpeg', 0.7), rects };
+    return { barsOk, iv, fav, mode: giga > 40 ? 'g' : dyna > 40 ? 'd' : 'n', thumb: th.toDataURL('image/jpeg', 0.7), rects };
   }
   // Form und Level aus KP + IVs (+ WP, soweit lesbar) bestimmen
   function resolveForm(deName, iv, kp, wpTxt) {
@@ -1706,6 +1719,7 @@
       const { im } = await loadImg(file);
       const a = analyzePixels(im);
       Object.assign(row, { thumb: a.thumb, iv: a.iv, fav: a.fav, mode: a.mode, status: 'Text lesen …' }); renderScan();
+      if (!a.barsOk) row.ivWarn = true;
       // Nur die Textstellen ausschneiden und einzeln lesen: viel schneller als jedes Mal das ganze Bild
       const t = {};
       for (const k of Object.keys(a.rects)) {
@@ -1725,7 +1739,7 @@
       const txtName = /Dieses?\s+(\S+)\s+wurde/i.exec((t.txt || '').replace(/\s+/g, ' ')); if (!de && txtName) de = matchName(txtName[1]);
       if (!de) { row.status = 'Pokémon nicht erkannt, bitte auswählen'; row.err = true; renderScan(); return; }
       const res = resolveForm(de, row.iv, row.kp, t.wp);
-      if (res) { row.k = res.sp.k; row.lvl = res.l; row.wp = res.cp; row.status = res.tie ? 'Form bitte prüfen' : res.score < 2 ? 'erkannt' : 'erkannt (WP geschätzt)'; row.err = !!res.tie; }
+      if (res) { row.k = res.sp.k; row.lvl = res.l; row.wp = res.cp; row.status = res.tie ? 'Form bitte prüfen' : row.ivWarn ? 'IV-Balken nicht gefunden, IVs bitte prüfen' : res.score < 2 ? 'erkannt' : 'erkannt (WP geschätzt)'; row.err = !!res.tie || !!row.ivWarn; }
       else { row.k = (DB.find(sp => sp.de === de) || {}).k; row.status = 'KP passt nicht zu den IVs, bitte prüfen'; row.err = true; }
       if (row.k && !SP[row.k].m.includes(row.mode)) row.mode = SP[row.k].m[0];
     } catch (err) { row.status = 'Fehler: ' + err.message; row.err = true; }
