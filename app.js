@@ -578,15 +578,39 @@
       if (f.mega && !sp.mg) return false;
       if (f.nomoves && m.fast && m.c1) return false;
       if (f.bg && !m.bg) return false;
+      if (state.ui.mlg && !leagueFit(m, state.ui.mlg)) return false;
       if ((state.ui.tf || []).length && !(state.ui.tf || []).every(tg => (m.tags || []).includes(tg))) return false;
       return true;
     });
   }
   let mineFreeze = { cfg: '', order: [] };
+  // Liga-Filter in „Meine Pokémon“: nur Arten aus der PvPoke-Meta (Top 300), die WP-mäßig in die Liga passen.
+  // Super-/Hyperliga: WP höchstens am Limit (darunter geht, lässt sich hochleveln). Meisterliga: über 2.500 WP.
+  const fmtOf = k => allFmts().find(f => f.key === k) || { key: k, cp: Number(String(k).split('|')[1]) || 10000 };
+  function leagueFit(m, k) {
+    const cap = fmtOf(k).cp, meta = metaOf(k); if (!meta.length) return true;
+    if (!meta.some(x => x.id === pvIdOf(m))) return false;
+    const st = statsOf(m), w = Number(m.wp) || (st.l ? st.cp : 0);
+    if (cap >= 10000) return w > 2500;
+    return !w || w <= cap;
+  }
+  // Wert für die Sortierung: PvPoke-Score der Art × Werte-Produkt deiner IVs (in % vom besten), fertige leicht vorne
+  function leagueVal(m, k) {
+    const f = fmtOf(k), cap = f.cp, meta = metaOf(k), e = meta.find(x => x.id === pvIdOf(m)); if (!e) return 0;
+    const r = myRank(m, cap), ps = pvStatus(m, f);
+    return e.s * (r ? r.pct / 100 : 0.9) + (ps.ok ? 0.5 : 0);
+  }
+  function leagueLine(m, k) {
+    const ps = pvStatus(m, fmtOf(k)); if (!ps.rank) return '';
+    return '<div class="sub small2"><b>Platz ' + ps.rank + '</b> · Score ' + ps.score.toFixed(1) + (ps.ivTxt && !ps.issues.some(x => /^IV-Rang/.test(x)) ? ' · ' + ps.ivTxt : '') +
+      (ps.ok ? ' <span class="rdy ok">✓ fertig</span>' : ' <span class="muted">· fehlt: ' + ps.issues.map(esc).join(' · ') + '</span>') + '</div>';
+  }
   function renderMine() {
     const f = state.ui.mf || {};
     $('#mineChips').innerHTML = [['hundo', '💯 Hundo'], ['iv80', 'IV ≥ 80%'], ['shiny', '✨ Shiny'], ['lucky', 'Glück'], ['crypto', 'Crypto'], ['fav', '★ Favoriten'], ['pvp', 'PvP'], ['leg', 'Legendär/Myst.'], ['mega', 'Mega-fähig'], ['nomoves', 'Attacken fehlen'], ['bg', '🖼 Hintergrund']]
       .map(([k, l]) => '<button class="chip' + (f[k] ? ' on' : '') + '" data-mf="' + k + '">' + l + '</button>').join('');
+    const lgSel = $('#mineLeague'); if (lgSel) { if (typeof state.ui.mlg === 'number') state.ui.mlg = 'all|' + state.ui.mlg;
+      lgSel.innerHTML = '<option value="">PvP: alle</option>' + allFmts().map(f => '<option value="' + esc(f.key) + '"' + (state.ui.mlg === f.key ? ' selected' : '') + '>' + esc(f.title) + (f.cup !== 'all' ? ' (' + f.cp + ')' : '') + '</option>').join(''); }
     const tf = state.ui.tf || [];
     $('#tagChips').innerHTML = (state.tags || []).map(tg => '<span class="tagwrap"><button class="chip tag' + (tf.includes(tg) ? ' on' : '') + '" data-tagf="' + esc(tg) + '">🏷 ' + esc(tg) + ' <small>' + state.mons.filter(m => (m.tags || []).includes(tg)).length + '</small></button><button class="x" data-tagdel="' + esc(tg) + '" title="Markierung löschen">✕</button></span>').join('');
     const sort = $('#mineSort').value;
@@ -595,21 +619,23 @@
     const key = { new: m => m.added || m.uid, name: m => spOf(m).de, iv: m => ivPct(m) ?? -1, cp: m => Number(m.wp) || (statsOf(m).l ? statsOf(m).cp : 0), dex: m => spOf(m).dex }[sort] || (m => Number(m.wp) || 0);
     const dir = state.ui.sortAsc ? 1 : -1;
     $('#mineDir').textContent = state.ui.sortAsc ? '↑ aufsteigend' : '↓ absteigend';
-    list.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+    if (state.ui.mlg) list.sort((a, b) => (leagueVal(b, state.ui.mlg) - leagueVal(a, state.ui.mlg)) * (state.ui.sortAsc ? -1 : 1));
+    else list.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
     // Reihenfolge einfrieren, solange nur Werte bearbeitet werden (sonst springt ein Pokémon beim Ändern von Level/WP weg).
     // Neu sortiert wird erst, wenn du Sortierung/Filter/Suche änderst oder die Ansicht neu öffnest.
-    const cfg = JSON.stringify([sort, dir, f, tf, $('#mineSearch').value, $('#mineType').value, $('#mineMode').value]);
+    const cfg = JSON.stringify([sort, dir, f, tf, state.ui.mlg, $('#mineSearch').value, $('#mineType').value, $('#mineMode').value]);
     if (mineFreeze.cfg === cfg && mineFreeze.order.length) {
       const pos = {}; mineFreeze.order.forEach((u, i) => { pos[u] = i; });
       list.sort((a, b) => (pos[a.uid] ?? -1) - (pos[b.uid] ?? -1));
     }
     mineFreeze = { cfg, order: list.map(m => m.uid) };
     $('#mineCount').textContent = list.length + ' von ' + state.mons.length;
+    if (state.ui.mlg && !metaOf(state.ui.mlg).length) loadLeague(state.ui.mlg);
     const open = new Set(state.ui.open || []);
     $('#mineList').innerHTML = list.length ? '<div class="mlist">' + list.map(m => {
       const sp = spOf(m), st = statsOf(m), p = ivPct(m), isOpen = open.has(m.uid);
       return '<div class="mitem' + (isOpen ? ' open' : '') + '" id="item-' + m.uid + '"><div class="mrow" data-toggle="' + m.uid + '">' + monPic(m, 'small') +
-        '<div class="mr-name"><b>' + modeBadge(m.mode) + spName(sp) + '</b><div class="sub">' + sp.t.map(typeTag).join('') + megaTag(m) + '</div></div>' +
+        '<div class="mr-name"><b>' + modeBadge(m.mode) + spName(sp) + '</b><div class="sub">' + sp.t.map(typeTag).join('') + megaTag(m) + '</div>' + (state.ui.mlg ? leagueLine(m, state.ui.mlg) : '') + '</div>' +
         '<div class="mr-tags">' + monTags(m) + '</div>' +
         '<div class="mr-iv ' + (p === null ? 'muted' : p === 100 ? 'hu' : p >= 80 ? 'good' : '') + '">' + (p === null ? '–' : p + '%') + '<small>' + (hasIV(m) ? m.iv.join('/') : 'IV') + '</small></div>' +
         '<div class="mr-cp">' + (st.l ? fmt(st.cp) + ' WP' : '–') + '<small>' + (st.l ? 'Lv ' + String(st.l).replace('.', ',') : '') + '</small></div>' +
@@ -1198,7 +1224,14 @@
   const PVGM = 'https://raw.githubusercontent.com/pvpoke/pvpoke/master/src/data/gamemaster.min.json';
   const BASEFMT = [{ key: 'all|1500', cup: 'all', cp: 1500, title: 'Superliga' }, { key: 'all|2500', cup: 'all', cp: 2500, title: 'Hyperliga' }, { key: 'all|10000', cup: 'all', cp: 10000, title: 'Meisterliga' }];
   if (!pvp || !pvp.L || pvp.v !== 2) pvp = { v: 2, L: {}, at: {}, fmts: null, fmtAt: 0 };
-  const savePvp = () => { try { localStorage.setItem(PVCACHE, JSON.stringify(pvp)); } catch (e) {} };
+  const savePvp = () => { try { localStorage.setItem(PVCACHE, JSON.stringify(pvp)); } catch (e) {
+    // Speicher voll: Cup-Listen, die gerade nicht gebraucht werden, wieder rauswerfen
+    const keep = new Set(['all|1500', 'all|2500', 'all|10000', state.ui.pvKey, state.ui.mlg]);
+    Object.keys(pvp.L).forEach(k => { if (!keep.has(k)) { delete pvp.L[k]; delete pvp.at[k]; } });
+    try { localStorage.setItem(PVCACHE, JSON.stringify(pvp)); } catch (e2) {}
+  } };
+  // Alle Meta-Listen (Ligen und Cups) nach und nach im Hintergrund laden, damit sie überall da sind (auch offline)
+  function preloadMeta() { allFmts().filter(f => !(pvp.L[f.key] && pvp.L[f.key].length && Date.now() - (pvp.at[f.key] || 0) < 24 * 3600e3)).forEach((f, i) => setTimeout(() => loadLeague(f.key), i * 2500)); }
   function allFmts() { return BASEFMT.concat(pvp.fmts || []); }
   function curFmt() { const k = state.ui.pvKey || 'all|1500'; return allFmts().find(f => f.key === k) || BASEFMT[0]; }
   let pvLoading = {};
@@ -1237,12 +1270,19 @@
       return '<div class="sub"><b>' + n + '</b> Platz ' + ps.rank + ' · Score ' + ps.score.toFixed(1) + ' · ' + esc(pvName(f, true)) + ' / ' + esc(pvName(c1)) + (c2 ? ' / ' + esc(pvName(c2)) : '') +
         (ps.ok ? ' <span class="rdy ok">✓ fertig</span>' : '<div class="up2">fehlt: ' + ps.issues.map(esc).join(' · ') + '</div>') + '</div>';
     });
+    // Cups: nur die, in deren Meta die Art vorkommt
+    (pvp.fmts || []).forEach(f => {
+      const meta = metaOf(f.key); if (!meta.length) return;
+      const ps = pvStatus(m, f); if (!ps.rank) return;
+      const over = f.cp < 10000 && wp > f.cp;
+      rows.push('<div class="sub small2">' + esc(f.title) + ' Platz ' + ps.rank + (ps.ivTxt && !ps.issues.some(x => /^IV-Rang/.test(x)) ? ' · ' + ps.ivTxt : '') + (over ? ' · <span class="muted">deine WP sind zu hoch</span>' : ps.ok ? ' <span class="rdy ok">✓ fertig</span>' : ' · <span class="muted">fehlt: ' + ps.issues.map(esc).join(' · ') + '</span>') + '</div>');
+    });
     const fit = wp && wp <= 1500 ? 'Superliga' : wp && wp <= 2500 ? 'Hyperliga' : 'Meisterliga';
     return '<div class="adv ok"><b>PvP-Pokémon</b> <span class="muted">(passt mit ' + (wp ? fmt(wp) + ' WP' : 'unbekannten WP') + ' in die ' + fit + '; Attacken laut PvPoke-Meta)</span>' + rows.join('') + '</div>' +
       '<div class="adv muted2">Raid- und Dyna-Tipps sind für dieses Pokémon ausgeblendet. Zum Zurückschalten oben auf „PvP“ klicken.</div>';
   }
   // Eintrag aus der PvPoke-Rangliste, mit Anteil, wie oft jede Attacke in den Simulationen genutzt wird
-  const pvShare = arr => { const t = (arr || []).reduce((a, m) => a + (m.uses || 0), 0) || 1, o = {}; (arr || []).forEach(m => { o[m.moveId] = (m.uses || 0) / t; }); return o; };
+  const pvShare = arr => { const t = (arr || []).reduce((a, m) => a + (m.uses || 0), 0) || 1, o = {}; (arr || []).forEach(m => { o[m.moveId] = Math.round((m.uses || 0) / t * 1000) / 1000; }); return o; };
   const pvEntry = x => ({ id: x.speciesId, s: x.score, ms: x.moveset || [], w: (x.matchups || []).map(o => o.opponent), lo: (x.counters || []).map(o => o.opponent), fu: pvShare((x.moves || {}).fastMoves), cu: pvShare((x.moves || {}).chargedMoves) });
   function loadPvp(force) {
     loadFormats(force);
@@ -1970,6 +2010,7 @@
   $('#pickType').addEventListener('input', renderPicker);
   $('#pickSearch').addEventListener('keydown', e => { if (e.key === 'Enter') { const b = $('#pickList [data-pick]'); if (b) b.click(); } });
   ['#mineSearch', '#mineType', '#mineMode', '#mineSort'].forEach(s => $(s).addEventListener('input', renderMine));
+  $('#mineLeague').addEventListener('input', e => { state.ui.mlg = e.target.value; save(); renderMine(); });
   if (state.ui.sortBy) $('#mineSort').value = state.ui.sortBy;
   $('#mineSort').addEventListener('change', () => { state.ui.sortBy = $('#mineSort').value; save(); });
   $('#mineDir').addEventListener('click', () => { state.ui.sortAsc = !state.ui.sortAsc; save(); renderMine(); });
@@ -2004,6 +2045,7 @@
   setInterval(() => { loadEvents(); checkNotifs(); }, 60000);
   renderScan();
   setTimeout(() => loadFormats(), 4000);
+  setTimeout(preloadMeta, 12000); setInterval(preloadMeta, 6 * 3600e3);
   document.addEventListener('input', e => { if (e.target.id === 'pvSearch') { state.ui.pvSearch = e.target.value; renderPvp(); const el = document.getElementById('pvSearch'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } });
   document.addEventListener('toggle', e => { if (e.target.classList && e.target.classList.contains('aebox')) { state.ui.aeOpen = e.target.open; save(true); } }, true);
   // Sync: beim Start Stand vom Handy/Mac übernehmen, dann regelmäßig und beim Zurückkehren in die App abgleichen
