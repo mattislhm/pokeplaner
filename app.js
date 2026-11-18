@@ -33,6 +33,14 @@
   MOVES.VOLT_TACKLE = MOVES.VOLT_TACKLE || ['Volt Tackle', 'Elektro', 90, 3.5, -33, 'Volttackle'];
   MOVES.FRUSTRATION = MOVES.FRUSTRATION || ['Frustration', 'Normal', 10, 2, -33, 'Frustration'];
   MOVES.RETURN = MOVES.RETURN || ['Return', 'Normal', 25, 0.5, -33, 'Rückkehr'];
+  // Kraftreserve (Hidden Power): Typ ist pro Pokémon zufällig, daher eine Variante je Typ zum Auswählen
+  const HPT = { BUG: 'Käfer', DARK: 'Unlicht', DRAGON: 'Drache', ELECTRIC: 'Elektro', FIGHTING: 'Kampf', FIRE: 'Feuer', FLYING: 'Flug', GHOST: 'Geist', GRASS: 'Pflanze', GROUND: 'Boden', ICE: 'Eis', POISON: 'Gift', PSYCHIC: 'Psycho', ROCK: 'Gestein', STEEL: 'Stahl', WATER: 'Wasser' };
+  if (MOVES.HIDDEN_POWER_FAST) {
+    const hp = MOVES.HIDDEN_POWER_FAST;
+    Object.keys(HPT).forEach(t => { MOVES['HIDDEN_POWER_' + t + '_FAST'] = [hp[0] + ' (' + t.charAt(0) + t.slice(1).toLowerCase() + ')', HPT[t], hp[2], hp[3], hp[4], (hp[5] || 'Kraftreserve') + ' (' + HPT[t] + ')']; });
+    MOVES.HIDDEN_POWER_FAST = hp.slice(0, 5).concat([(hp[5] || 'Kraftreserve') + ' (Typ unbekannt)']);
+    DB.forEach(sp => ['q', 'eq'].forEach(k => { if (sp[k].includes('HIDDEN_POWER_FAST')) Object.keys(HPT).forEach(t => { const id = 'HIDDEN_POWER_' + t + '_FAST'; if (!sp.q.includes(id) && !sp.eq.includes(id)) sp[k].push(id); }); }));
+  }
   // Aktuelle Attacken-Pools von PvPoke einmischen (neue Attacken aus Saison-Updates). Statisch mitgeliefert + täglich aktualisiert.
   const POOLKEY = 'pokeplaner-pools';
   function mergePools(pool) {
