@@ -1706,10 +1706,16 @@
       const { im } = await loadImg(file);
       const a = analyzePixels(im);
       Object.assign(row, { thumb: a.thumb, iv: a.iv, fav: a.fav, mode: a.mode, status: 'Text lesen …' }); renderScan();
-      const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0);
-      const r = await window.rhNet.ocr(c.toDataURL('image/png'), a.rects);
-      if (!r || !r.ok) throw new Error(r && r.error || 'Texterkennung fehlgeschlagen');
-      const t = r.text, kpm = /(\d{2,4})\s*\/\s*(\d{2,4})\s*K\s*P/i.exec((t.kp || '') + ' ' + (t.name || ''));
+      // Nur die Textstellen ausschneiden und einzeln lesen: viel schneller als jedes Mal das ganze Bild
+      const t = {};
+      for (const k of Object.keys(a.rects)) {
+        const q = a.rects[k], c = document.createElement('canvas'); c.width = q.width; c.height = q.height;
+        c.getContext('2d').drawImage(im, q.left, q.top, q.width, q.height, 0, 0, q.width, q.height);
+        const r = await window.rhNet.ocr(c.toDataURL('image/png'), { [k]: { left: 0, top: 0, width: q.width, height: q.height } });
+        if (!r || !r.ok) throw new Error(r && r.error || 'Texterkennung fehlgeschlagen');
+        t[k] = r.text[k];
+      }
+      const kpm = /(\d{2,4})\s*\/\s*(\d{2,4})\s*K\s*P/i.exec((t.kp || '') + ' ' + (t.name || ''));
       row.kp = kpm ? Number(kpm[2]) : null;
       row.lucky = /GL[ÜU]CKS/i.test((t.name || '') + (t.kp || ''));
       const dm = /am\s+(\d{2})\.(\d{2})\.(\d{4})/.exec(t.txt || ''), wm = /N[äa]he von\s+(.+?)\s+gefangen/i.exec((t.txt || '').replace(/\s+/g, ' '));
@@ -1735,7 +1741,9 @@
     let row;
     while ((row = scanRows.find(r => r.status === 'wartet …'))) {
       row.status = 'lese Bild …'; renderScan();
-      await Promise.race([processShot(row, row.file), new Promise(res => setTimeout(() => { if (/lese|Text/.test(row.status)) { row.status = 'Zeitüberschreitung, bitte prüfen'; row.err = true; } res(); }, 30000))]);
+      // streng nacheinander: erst wenn ein Bild ganz fertig ist, kommt das nächste dran
+      const slow = setTimeout(() => { if (/lese|Text/.test(row.status)) { row.status = 'Text lesen dauert länger …'; renderScan(); } }, 20000);
+      await processShot(row, row.file); clearTimeout(slow);
     }
     scanBusy = false; renderScan();
   }
