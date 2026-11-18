@@ -1719,7 +1719,7 @@
       const txtName = /Dieses?\s+(\S+)\s+wurde/i.exec((t.txt || '').replace(/\s+/g, ' ')); if (!de && txtName) de = matchName(txtName[1]);
       if (!de) { row.status = 'Pokémon nicht erkannt, bitte auswählen'; row.err = true; renderScan(); return; }
       const res = resolveForm(de, row.iv, row.kp, t.wp);
-      if (res) { row.k = res.sp.k; row.lvl = res.l; row.wp = res.cp; row.status = res.tie ? 'Form bitte prüfen' : res.score < 2 ? 'erkannt' : 'erkannt (WP geschätzt)'; if (res.tie) row.err = true; }
+      if (res) { row.k = res.sp.k; row.lvl = res.l; row.wp = res.cp; row.status = res.tie ? 'Form bitte prüfen' : res.score < 2 ? 'erkannt' : 'erkannt (WP geschätzt)'; row.err = !!res.tie; }
       else { row.k = (DB.find(sp => sp.de === de) || {}).k; row.status = 'KP passt nicht zu den IVs, bitte prüfen'; row.err = true; }
       if (row.k && !SP[row.k].m.includes(row.mode)) row.mode = SP[row.k].m[0];
     } catch (err) { row.status = 'Fehler: ' + err.message; row.err = true; }
