@@ -1874,7 +1874,7 @@
   function syncSoon() { if (!syncOn()) return; clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, 3000); }
   function gh(path, opt) {
     return fetch('https://api.github.com' + path, Object.assign({ cache: 'no-store' }, opt, { headers: { Authorization: 'Bearer ' + syncCfg.token, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' } }))
-      .then(r => r.json().then(j => { if (!r.ok) throw new Error(j.message || ('HTTP ' + r.status)); return j; }));
+      .then(r => r.json().then(j => { if (!r.ok) throw new Error(r.status === 401 ? 'GitHub-Schlüssel ungültig oder abgelaufen (Bad credentials). Code nochmal komplett kopieren, sonst neuen Schlüssel anlegen.' : (j.message || ('HTTP ' + r.status))); return j; }));
   }
   const fileText = f => !f ? Promise.resolve(null) : f.truncated && f.raw_url ? fetch(f.raw_url, { cache: 'no-store' }).then(r => r.text()) : Promise.resolve(f.content);
   // Fremden Stand einmischen: pro Pokémon gewinnt die neuere Änderung, Löschungen gelten, wenn sie neuer sind
@@ -1925,7 +1925,7 @@
   }
   async function syncSetup(token) {
     // Verbindungscode „Schlüssel.GistID“ oder nur der Schlüssel
-    const [tok, gid] = String(token).trim().split('.'); if (gid) syncCfg.gist = gid;
+    const [tok, gid] = String(token).replace(/\s+/g, '').replace(/^.*#sync=/, '').split('.'); if (gid) syncCfg.gist = gid;
     syncCfg.token = tok; syncCfg.err = ''; renderSyncInfo('Verbinde …');
     try {
       if (!syncCfg.gist) {
