@@ -1259,7 +1259,9 @@
     return off / def;
   }
   const memberFromMon = m => { const sp = spOf(m), mvs = [m.fast, m.c1, m.c2].filter(Boolean); const pv = pvIdOf(m), me = metaOf(curFmt().key).find(x => x.id === pv);
-    return { key: 'm' + m.uid, label: sp.de + (m.crypto ? ' (Crypto)' : '') + (ivPct(m) !== null ? ' ' + ivPct(m) + '%' : ''), sp, t: sp.t, pv, m, mt: mvs.length ? mvs.map(id => mv(id).t) : me ? me.ms.map(id => pvMove(id)[1]) : sp.t }; };
+    const wpv = Number(m.wp) || (statsOf(m).l ? statsOf(m).cp : 0);
+    const info = [ivPct(m) !== null ? ivPct(m) + '% (' + m.iv.join('/') + ')' : '', wpv ? fmt(wpv) + ' WP' : '', mvs.length ? mvs.map(id => mv(id).n).join(' / ') : ''].filter(Boolean).join(' · ');
+    return { key: 'm' + m.uid, label: sp.de + (m.crypto ? ' (Crypto)' : '') + (m.shiny ? ' ✨' : '') + (wpv ? ' ' + fmt(wpv) + ' WP' : '') + (ivPct(m) !== null ? ' ' + ivPct(m) + '%' : ''), info, sp, t: sp.t, pv, m, mt: mvs.length ? mvs.map(id => mv(id).t) : me ? me.ms.map(id => pvMove(id)[1]) : sp.t }; };
   const memberFromMeta = x => { const r = pvSp(x.id); if (!r) return null; return { key: 'p' + x.id, label: r.sp.de + (r.shadow ? ' (Crypto)' : '') + ' – hast du nicht', sp: r.sp, t: r.sp.t, pv: x.id, mt: x.ms.map(id => pvMove(id)[1]), meta: x }; };
   const threatOf = x => { const r = pvSp(x.id); return r ? { id: x.id, sp: r.sp, shadow: r.shadow, t: r.sp.t, mt: x.ms.map(id => pvMove(id)[1]), s: x.s } : null; };
   function teamEval(team, l, threats) {
@@ -1306,6 +1308,9 @@
   const buildAround = (anchor, pool, l, threats) => { const s = suggestTeams([anchor], pool, l, threats, 1)[0]; return s ? s.team : [anchor]; };
   window.__pvTest = { buildAround, suggestTeams, metaOf, threatOf, memberFromMon, memberFromMeta, pvp: () => pvp };
   let pvSugg = null;
+  // Teammitglied anzeigen: bei eigenen Pokémon anklickbar (öffnet es in Meine Pokémon) mit WP, IVs und Attacken
+  const memberChip = (c, dim) => c.m ? '<span class="tmem' + (dim ? ' dim' : '') + '" data-detail="' + c.m.uid + '" title="Öffnen">' + img(c.sp, 'mini', c.m.shiny) + '<span><b>' + esc(c.sp.de) + (c.m.crypto ? ' <small>Crypto</small>' : '') + '</b><small>' + esc(c.info || '') + '</small></span></span>'
+    : '<span class="tmem' + (dim ? ' dim' : '') + '">' + img(c.sp, 'mini') + '<span><b>' + esc(c.sp.de) + '</b><small>hast du nicht</small></span></span>';
   function renderPvp() {
     loadPvp(); loadEvents();
     const f = curFmt(), l = f.key, cap = f.cp, out = $('#pvpOut');
@@ -1355,11 +1360,12 @@
       '<div class="boss-pick"><button class="btn mini" data-build="1">✨ Vorschläge für die leeren Slots</button><label class="toggle small2"><input type="checkbox" data-pvmine' + (state.ui.pvOnlyMine === false ? '' : ' checked') + '> nur meine Pokémon vorschlagen</label><button class="btn mini" data-clearteam="1">Leeren</button></div></div>' +
       (pvSugg && pvSugg.l === l ? '<div class="panel wide sugg"><b>Vorschläge</b> <span class="muted small2">(fest: ' + pvSugg.fixed.map(esc).join(', ') + ')</span>' + pvSugg.list.map((o, i) => {
         const ev2 = teamEval(o.team, l, threats), cov = ev2.filter(r => r.best >= 1.15).length, hol = ev2.filter(r => r.best < 0.88).map(r => r.th.sp.de);
-        return '<div class="srow2"><span class="rk-n">' + (i + 1) + '</span>' + o.team.map(c => img(c.sp, 'mini') + '<span class="' + (pvSugg.fixed.includes(c.label) ? 'muted' : '') + '">' + esc(c.label) + '</span>').join(' · ') +
+        return '<div class="srow2"><span class="rk-n">' + (i + 1) + '</span>' + o.team.map(c => memberChip(c, pvSugg.fixed.includes(c.label))).join('') +
           '<span class="muted small2"> · deckt ' + cov + '/' + threats.length + (hol.length ? ' · Lücken: ' + hol.slice(0, 4).map(esc).join(', ') : '') + '</span><button class="btn mini" data-usesugg="' + i + '">übernehmen</button></div>';
       }).join('') + '</div>' : '') +
       (team.some(Boolean) ? '<div class="adv ' + (covered >= 14 ? 'ok' : 'up') + '">Gegen ' + covered + ' von ' + threats.length + ' Top-Meta-Pokémon hat dein Team einen klaren Konter.' + (holes.length ? ' Lücken: ' + holes.map(r => esc(r.th.sp.de)).join(', ') + '.' : '') + '</div>' +
-        '<table class="cov"><tr><th>Top-Meta</th>' + team.map(t => '<th>' + (t ? img(t.sp, 'mini') + esc(t.sp.de) : '–') + '</th>').join('') + '</tr>' +
+        '<div class="tmems">' + team.filter(Boolean).map(c => memberChip(c)).join('') + '</div>' +
+        '<table class="cov"><tr><th>Top-Meta</th>' + team.map(t => '<th>' + (t ? '<span' + (t.m ? ' class="lnk" data-detail="' + t.m.uid + '"' : '') + '>' + img(t.sp, 'mini') + esc(t.sp.de) + '</span>' : '–') + '</th>').join('') + '</tr>' +
         ev.map(r => '<tr><td>' + img(r.th.sp, 'mini') + esc(r.th.sp.de) + (r.th.shadow ? ' <small>Crypto</small>' : '') + '</td>' + r.sc.map(cell).join('') + '</tr>').join('') + '</table>' +
         '<div class="muted small">✓ gewinnt meist · ≈ offen · ✗ verliert meist. Aus den Top-Siegen/-Niederlagen von PvPoke, sonst nach Typen geschätzt (keine echte Kampf-Simulation).</div>' : '<div class="empty">Wähl ein Pokémon in Slot 1 und klick „Team um Slot 1 bauen“, oder stell alle drei selbst zusammen.</div>');
     window.__pvBuild = () => {
