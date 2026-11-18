@@ -944,7 +944,6 @@
   function ownInfo(dex) { const own = state.mons.filter(m => spOf(m).dex === dex); return { has: own.length > 0, shiny: own.some(m => m.shiny) }; }
   function forMeTags(dex, canShiny) {
     const o = ownInfo(dex), out = [];
-    if (!o.has) out.push('<span class="fm neu">🆕 fehlt dir</span>');
     if (canShiny && !o.shiny && shinyWorth(dex)) out.push('<span class="fm sh">✨ Shiny fehlt</span>');
     return out.join('');
   }
@@ -1106,7 +1105,7 @@
     cal += '</div>';
     const fd = [];
     const fdSeen = new Set();
-    running.concat(upcoming).forEach(e => monsOfEvent(e).forEach(p => { const o = ownInfo(p.dex), k = p.dex + '|' + e.eventType; if (fdSeen.has(k)) return; if ((p.shiny && shinyWorth(p.dex) && !o.shiny) || !o.has) { fdSeen.add(k); fd.push({ e, p, o }); } }));
+    running.concat(upcoming).forEach(e => monsOfEvent(e).forEach(p => { const o = ownInfo(p.dex), k = p.dex + '|' + e.eventType; if (fdSeen.has(k)) return; if (p.shiny && shinyWorth(p.dex) && !o.shiny) { fdSeen.add(k); fd.push({ e, p, o }); } }));
     const fdHtml = fd.length ? '<h2 class="sub">💡 Für dich interessant</h2><div class="fdl">' + fd.slice(0, 16).map(x => '<a class="fdi" href="' + esc(x.e.link) + '" target="_blank"><img src="' + esc(x.p.img) + '" alt=""><div><b>' + esc(deName(x.p.dex, x.p.name)) + '</b> ' + forMeTags(x.p.dex, x.p.shiny) + '<div class="sub">' + esc(evT(x.e)[0]) + ' · ' + (evDate(x.e.start) <= now ? 'läuft bis ' + dfmt(evDate(x.e.end)) : 'ab ' + dfmt(evDate(x.e.start))) + '</div></div></a>').join('') + '</div>' : '';
     const cds = upcoming.concat(running).filter(e => e.eventType === 'community-day' && monsOfEvent(e).length);
     out.innerHTML = fdHtml + (cds.length ? '<h2 class="sub">🌟 Community Day: was entwickeln?</h2>' + cds.map(cdHelp).join('') : '') + '<h2 class="sub">🔴 Läuft gerade (' + running.length + ')</h2><div class="evgrid">' + (running.map(e => evCard(e, now)).join('') || '<div class="empty">Nichts.</div>') + '</div>' +
