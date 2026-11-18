@@ -1257,6 +1257,7 @@
     return t.map[iv[0] * 256 + iv[1] * 16 + iv[2]];
   }
   const pvIdOf = m => { const b = PVREV[m.k]; return b ? b + (m.crypto ? '_shadow' : '') : null; };
+  const eligibleBuild = (m, cap) => eligible(m, cap);
   function eligible(m, cap) { if (cap >= 10000) return true; const st = statsOf(m); return !st.l || st.cp <= cap; }
   // Matchup-Schätzung: PvPoke-Daten (Top-Siege/-Niederlagen), sonst Typen (eigene Attacken gegen Gegner-Typen und umgekehrt)
   function matchScore(me, th, l) {
@@ -1389,6 +1390,24 @@
         '<div class="sub">' + (o.r ? 'IV-Rang <b>' + o.r.rank + '</b>/4096 (' + o.r.pct.toFixed(1) + '%) · bestes Level ' + String(o.r.l).replace('.', ',') + ' = ' + fmt(o.r.cp) + ' WP' : 'IVs eintragen für den IV-Rang') + '</div>' +
         (!o.ps.ok ? '<div class="sub">Empfohlen: ' + rec.map(v => esc(v[0])).join(' / ') + '</div>' : '') + '</div></div>';
     }).join('');
+    // Zum Ausbauen: starke Meta-Arten, von denen du noch kein fertiges Exemplar hast; pro Art das Exemplar mit den besten IVs
+    const readyIds = new Set(state.mons.filter(m => eligibleBuild(m, cap)).filter(m => pvStatus(m, f).ok).map(pvIdOf));
+    const cand = {};
+    state.mons.forEach(m => {
+      const id = pvIdOf(m); if (!id || readyIds.has(id)) return;
+      const pos = meta.findIndex(x => x.id === id); if (pos < 0 || pos >= 100) return;
+      const ps = pvStatus(m, f), r = myRank(m, cap), wpNow = Number(m.wp) || (statsOf(m).l ? statsOf(m).cp : 0);
+      if (r && r.rank > PV_TOP) return; // IVs taugen nicht, Ausbauen lohnt nicht
+      if (cap < 10000 && wpNow > cap) return; // schon über dem Liga-Limit
+      const o = { m, pos: pos + 1, ps, r };
+      if (!cand[id] || (r ? r.rank : 9999) < (cand[id].r ? cand[id].r.rank : 9999)) cand[id] = o;
+    });
+    const todo = Object.values(cand).sort((a, b) => a.pos - b.pos).slice(0, 12);
+    const buildHtml = todo.length ? '<h2 class="sub">🔧 Lohnt sich zum Ausbauen</h2><div class="muted small">Starke Pokémon der ' + esc(f.title) + ', von denen du noch keins fertig hast. Pro Art dein Exemplar mit den besten IVs.</div><div class="rank">' + todo.map(o => {
+      const sp = spOf(o.m);
+      return '<div class="rk" data-detail="' + o.m.uid + '"><span class="rk-n">#' + o.pos + '</span>' + img(sp, 'spr', o.m.shiny) + '<div class="grow"><b>' + spName(sp) + ' ' + monTags(o.m) + '</b> <span class="rdy mid">Score ' + o.ps.score.toFixed(1) + '</span>' +
+        '<div class="sub">' + (o.r ? 'IV-Rang ' + o.r.rank + ' · Ziel: Level ' + String(o.r.l).replace('.', ',') + ' = ' + fmt(o.r.cp) + ' WP' : 'IVs eintragen') + '</div><div class="sub up2">To-do: ' + o.ps.issues.filter(x => !/IV-Rang/.test(x)).map(esc).join(' · ') + '</div></div></div>';
+    }).join('') + '</div>' : '';
     // Team-Bauer
     const threats = meta.slice(0, 40).map(threatOf).filter(Boolean);
     const myAll = state.mons.filter(m => eligible(m, cap)).map(memberFromMon);
@@ -1438,6 +1457,7 @@
     window.__pvUse = i => { const o = pvSugg && pvSugg.list[i]; if (!o) return; state.ui.team[l] = o.team.map(c => c.key); pvSugg = null; save(); renderPvp(); };
     out.innerHTML = (f.cup !== 'all' ? '<div class="adv ' + (isLive(f) ? 'ok' : 'muted2') + '"><b>' + esc(f.title) + '</b> · ' + (cap >= 10000 ? 'ohne WP-Limit' : 'bis ' + cap + ' WP') + (isLive(f) ? ' · 🟢 gerade in der GO-Kampfliga' : '') + (f.rules && f.rules.length ? '<div class="sub">Regeln (PvPoke, englisch): ' + f.rules.map(esc).join(' · ') + '</div>' : '') + '</div>' : '') +
       '<h2 class="sub">🧩 Team-Bauer</h2>' + teamHtml +
+      buildHtml +
       '<h2 class="sub">⭐ Deine für die ' + f.title + '</h2>' + (mineRows ? '<div class="rank">' + mineRows + '</div>' : '<div class="empty">Keine deiner Pokémon sind in den Top 150 dieser Liga (oder ihre WP liegen über dem Limit).</div>') +
       '<h2 class="sub">📊 Meta-Top 50 ' + f.title + (ty ? ' · ' + ty : '') + '</h2><div class="rank">' + metaRows + '</div>' +
       searchBox('Meta-Pokémon in deiner Box', dexList(top.slice(0, 30).map(x => pvSp(x.id).sp.dex)), 'Pokédex-Nummern der Top 30 dieser Liste.');
