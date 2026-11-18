@@ -2084,6 +2084,8 @@
   setInterval(() => { loadEvents(); checkNotifs(); }, 60000);
   renderScan();
   setTimeout(() => loadFormats(), 4000);
+  // Hintergrund-Liste regelmäßig auffrischen (nur am Mac, das Handy bekommt sie über den Abgleich)
+  if (window.rhNet && !window.rhNet.web) { setTimeout(() => loadBackgrounds(), 20000); setInterval(() => loadBackgrounds(), 12 * 3600e3); }
   setTimeout(preloadMeta, 12000); setInterval(preloadMeta, 6 * 3600e3);
   document.addEventListener('input', e => { if (e.target.id === 'pvSearch') { state.ui.pvSearch = e.target.value; renderPvp(); const el = document.getElementById('pvSearch'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } });
   document.addEventListener('toggle', e => { if (e.target.classList && e.target.classList.contains('aebox')) { state.ui.aeOpen = e.target.open; save(true); } }, true);
