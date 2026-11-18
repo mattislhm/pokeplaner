@@ -555,6 +555,7 @@
       if (f.lucky && !m.lucky) return false;
       if (f.crypto && !m.crypto) return false;
       if (f.fav && !m.fav) return false;
+      if (f.pvp && !m.pvp) return false;
       if (f.leg && !sp.cls) return false;
       if (f.mega && !sp.mg) return false;
       if (f.nomoves && m.fast && m.c1) return false;
@@ -566,7 +567,7 @@
   let mineFreeze = { cfg: '', order: [] };
   function renderMine() {
     const f = state.ui.mf || {};
-    $('#mineChips').innerHTML = [['hundo', '💯 Hundo'], ['iv80', 'IV ≥ 80%'], ['shiny', '✨ Shiny'], ['lucky', 'Glück'], ['crypto', 'Crypto'], ['fav', '★ Favoriten'], ['leg', 'Legendär/Myst.'], ['mega', 'Mega-fähig'], ['nomoves', 'Attacken fehlen'], ['bg', '🖼 Hintergrund']]
+    $('#mineChips').innerHTML = [['hundo', '💯 Hundo'], ['iv80', 'IV ≥ 80%'], ['shiny', '✨ Shiny'], ['lucky', 'Glück'], ['crypto', 'Crypto'], ['fav', '★ Favoriten'], ['pvp', 'PvP'], ['leg', 'Legendär/Myst.'], ['mega', 'Mega-fähig'], ['nomoves', 'Attacken fehlen'], ['bg', '🖼 Hintergrund']]
       .map(([k, l]) => '<button class="chip' + (f[k] ? ' on' : '') + '" data-mf="' + k + '">' + l + '</button>').join('');
     const tf = state.ui.tf || [];
     $('#tagChips').innerHTML = (state.tags || []).map(tg => '<span class="tagwrap"><button class="chip tag' + (tf.includes(tg) ? ' on' : '') + '" data-tagf="' + esc(tg) + '">🏷 ' + esc(tg) + ' <small>' + state.mons.filter(m => (m.tags || []).includes(tg)).length + '</small></button><button class="x" data-tagdel="' + esc(tg) + '" title="Markierung löschen">✕</button></span>').join('');
