@@ -28,6 +28,9 @@
   // Signaturattacken der Urformen (in den Spieldaten vorhanden, aber nicht verknüpft): bekommen sie beim Formwechsel
   MOVES.ROAR_OF_TIME = MOVES.ROAR_OF_TIME || ['Roar of Time', 'Drache', 160, 2, -100, 'Zeitenlärm'];
   MOVES.SPACIAL_REND = MOVES.SPACIAL_REND || ['Spacial Rend', 'Drache', 160, 2.5, -100, 'Raumschlag'];
+  // Kowtow Cleave (Gladimperio, Community Day Nov. 2026): Raids 85 Stärke / 50 Energie / 2 s. Deutscher Name noch nicht bestätigt
+  MOVES.KOWTOW_CLEAVE = MOVES.KOWTOW_CLEAVE || ['Kowtow Cleave', 'Unlicht', 85, 2, -50, 'Kowtow Cleave'];
+  if (SP.KINGAMBIT) { ['KOWTOW_CLEAVE'].forEach(mid => { if (!SP.KINGAMBIT.ex.includes(mid)) SP.KINGAMBIT.ex.push(mid); }); if (MOVES.LOW_KICK_FAST && !SP.KINGAMBIT.q.includes('LOW_KICK_FAST')) SP.KINGAMBIT.q.push('LOW_KICK_FAST'); }
   [['DIALGA_ORIGIN', 'ROAR_OF_TIME'], ['PALKIA_ORIGIN', 'SPACIAL_REND']].forEach(([k, mid]) => { if (SP[k] && !SP[k].ex.includes(mid)) SP[k].ex.push(mid); });
   // Weitere Attacken, die in den Spieldaten-Werten fehlen (Werte aus dem Game Master)
   MOVES.VOLT_TACKLE = MOVES.VOLT_TACKLE || ['Volt Tackle', 'Elektro', 90, 3.5, -33, 'Volttackle'];
@@ -1380,7 +1383,9 @@
       if (have.length < 2) issues.push(have.length ? 'zweite Lade-Attacke fehlt' : 'Lade-Attacken fehlen');
       else {
         const myC = have.map(c => cu[toPv(c)] || 0), alt = Math.min(...myC);
-        cs.filter(c => !have.includes(c)).forEach(c => { const sh = cu[toPv(c)] || 0; if (e.cu ? (sh >= 0.3 && alt < sh / 2) : true) issues.push('Lade-Attacke ' + mv(c).n + ' fehlt'); });
+        // Attacke, die PvPoke noch gar nicht kennt (z. B. neue Community-Day-Attacke): nicht als schlechter werten
+        const unknown = e.cu && have.some(c => !(toPv(c) in cu));
+        if (!unknown) cs.filter(c => !have.includes(c)).forEach(c => { const sh = cu[toPv(c)] || 0; if (e.cu ? (sh >= 0.3 && alt < sh / 2) : true) issues.push('Lade-Attacke ' + mv(c).n + ' fehlt'); });
       }
     }
     let ivTxt = '';
