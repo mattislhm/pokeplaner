@@ -515,3 +515,24 @@ table.cov td.ev{color:var(--orange)}
 .mitem.sub2 .mrow{padding-left:22px}
 ul.why{margin:4px 0 0 18px;padding:0}
 ul.why li{margin:2px 0}
+
+/* Seitenleiste mit Gruppen */
+.groups{display:flex;flex-direction:column;gap:2px;margin-bottom:10px}
+.grp-h{all:unset;cursor:pointer;display:flex;align-items:center;gap:6px;padding:9px 12px;border-radius:9px;font-weight:700;color:var(--text)}
+.grp-h:hover{background:var(--panel2)}
+.grp:not(.single) > .grp-h::after{content:'▸';margin-left:auto;color:var(--muted);transition:transform .15s}
+.grp.open > .grp-h::after{transform:rotate(90deg)}
+.grp-b{display:none;flex-direction:column;gap:1px;margin:0 0 6px 14px;padding-left:8px;border-left:1px solid var(--line)}
+.grp.open > .grp-b{display:flex}
+.grp-b .nav{padding:7px 12px;font-size:13.5px}
+.grp.single > .grp-h.active{background:var(--panel2);box-shadow:inset 3px 0 0 var(--accent)}
+@media (max-width: 820px){
+  .side{flex-wrap:wrap;row-gap:4px}
+  .groups{display:contents}
+  .grp{display:contents}
+  .grp-h{order:1;white-space:nowrap;padding:7px 9px;font-size:13.5px}
+  .grp:not(.single) > .grp-h::after{display:none}
+  .grp.open > .grp-h{background:var(--panel2)}
+  .grp-b{order:2;flex-basis:100%;flex-direction:row;margin:0;padding:0;border:0;overflow-x:auto}
+  .side nav.bottom-nav{order:1}
+}

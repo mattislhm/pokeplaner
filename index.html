@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <title>PokéPlaner</title>
-<link rel="stylesheet" href="style.css?v=1795344980">
+<link rel="stylesheet" href="style.css?v=1795354675">
 </head>
 <body>
 <div class="app">
@@ -25,26 +25,24 @@
         <div class="brand-sub">Pokémon GO</div>
       </div>
     </div>
-    <nav><button class="nav active" data-view="mine">Meine Pokémon</button><button class="nav" data-view="cleanup">Aufräumen</button><button class="nav" data-view="events">News &amp; Events</button><button class="nav" data-view="advisor">Ratgeber</button></nav>
-    <div class="cat">
-      <div class="cat-h">Dyna-Kämpfe</div>
-      <nav>
-        <button class="nav" data-view="overview">Übersicht</button>
-        <button class="nav" data-view="team">Team-Planer</button>
-        <button class="nav" data-view="ranking">Rangliste</button>
-      </nav>
-    </div>
-    <div class="cat">
-      <div class="cat-h">PvP</div>
-      <nav><button class="nav" data-view="pvp">Kampfliga</button></nav>
-    </div>
-    <div class="cat">
-      <div class="cat-h">Raids</div>
-      <nav>
+    <div class="groups">
+      <div class="grp"><button class="grp-h" data-grp="box">📋 Meine Box</button><div class="grp-b">
+        <button class="nav active" data-view="mine">Meine Pokémon</button>
+        <button class="nav" data-view="cleanup">Aufräumen</button>
+        <button class="nav" data-view="advisor">Ratgeber</button>
+      </div></div>
+      <div class="grp"><button class="grp-h" data-grp="raid">⚔️ Raids</button><div class="grp-b">
         <button class="nav" data-view="raids">Team-Planer</button>
         <button class="nav" data-view="rranking">Rangliste</button>
         <button class="nav" data-view="rocket">Team Rocket</button>
-      </nav>
+      </div></div>
+      <div class="grp"><button class="grp-h" data-grp="dyna">🔴 Dyna-Kämpfe</button><div class="grp-b">
+        <button class="nav" data-view="overview">Übersicht</button>
+        <button class="nav" data-view="team">Team-Planer</button>
+        <button class="nav" data-view="ranking">Rangliste</button>
+      </div></div>
+      <div class="grp single"><button class="nav grp-h" data-view="pvp">🏆 PvP</button></div>
+      <div class="grp single"><button class="nav grp-h" data-view="events">📅 News &amp; Events</button></div>
     </div>
     <nav class="bottom-nav"><button class="nav" data-view="settings">Einstellungen</button></nav>
     <div class="side-stats" id="sideStats"></div>
@@ -268,11 +266,11 @@
   </div>
 </div>
 
-<script src="shim.js?v=1795344980"></script>
+<script src="shim.js?v=1795354675"></script>
 <script src="vendor/qrcode.js"></script>
-<script src="data.js?v=1795344980"></script>
-<script src="data_pvp.js?v=1795344980"></script>
-<script src="data_pool.js?v=1795344980"></script>
-<script src="app.js?v=1795344980"></script>
+<script src="data.js?v=1795354675"></script>
+<script src="data_pvp.js?v=1795354675"></script>
+<script src="data_pool.js?v=1795354675"></script>
+<script src="app.js?v=1795354675"></script>
 </body>
 </html>

@@ -2246,12 +2246,15 @@
     if (v === 'mine' && current !== 'mine') mineFreeze = { cfg: '', order: [] };
     current = v;
     document.querySelectorAll('.nav').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+    document.querySelectorAll('.grp').forEach(g => { if (g.querySelector('.nav[data-view="' + v + '"]')) g.classList.add('open'); else if (!g.dataset.pinned) g.classList.remove('open'); });
     document.querySelectorAll('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
     if (v === 'raids') loadLive();
     renderAll();
   }
   document.addEventListener('error', e => { if (e.target && e.target.tagName === 'IMG') e.target.style.visibility = 'hidden'; }, true);
   document.querySelectorAll('.nav').forEach(b => b.addEventListener('click', () => show(b.dataset.view)));
+  // Gruppen auf- und zuklappen; ein Klick auf die Überschrift öffnet zugleich die erste Seite der Gruppe
+  document.querySelectorAll('.grp-h[data-grp]').forEach(h => h.addEventListener('click', () => { const g = h.parentElement, was = g.classList.contains('open'); document.querySelectorAll('.grp').forEach(x => x.classList.remove('open')); if (!was || !g.querySelector('.nav.active')) { g.classList.add('open'); if (!g.querySelector('.nav.active')) show(g.querySelector('.nav').dataset.view); } }));
   const monBy = uid => state.mons.find(m => m.uid === Number(uid));
   function goto(uid) { showDetail(uid); }
   document.addEventListener('click', e => {
