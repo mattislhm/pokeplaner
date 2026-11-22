@@ -1704,7 +1704,7 @@
     const opts = bgsFor(sp);
     const others = m.allBg ? bgList().filter(b => !opts.includes(b)).sort((a, b) => b.d - a.d) : [];
     const opt = b => '<option value="' + b.id + '"' + (m.bg === b.id ? ' selected' : '') + '>' + esc(b.n) + (b.d ? ' (' + new Date(b.d).getFullYear() + ')' : '') + '</option>';
-    const more = '<button class="btn mini" data-allbg="' + m.uid + '">' + (m.allBg ? 'Nur passende zeigen' : 'Fehlt einer? Alle zeigen') + '</button>' + (bgLoading ? '<span class="muted small2 bgprog"></span>' : '<button class="btn mini" data-bgreload="1">Liste neu laden</button>');
+    const more = '<button class="btn mini" data-allbg="' + m.uid + '">' + (m.allBg ? 'Nur passende zeigen' : 'Fehlt einer? Alle zeigen') + '</button>' + (bgLoading ? '<span class="muted small2 bgprog"></span>' : '<button class="btn mini" data-bgreload="1">Liste neu laden</button><span class="muted small2" title="Anzahl Hintergründe je Quelle"> Dittobase ' + ((bgData && bgData.list || []).length) + ' · Bulbapedia ' + ((bgData && bgData.bp || []).length) + '</span>');
     if (!opts.length && !cur && !m.allBg) return '<div class="bgrow"><span class="muted small2">Für ' + esc(sp.de) + ' sind keine Ortshintergründe bekannt.</span>' + more + '</div>';
     return '<div class="bgrow"><select data-bg="1" data-uid="' + m.uid + '"><option value="">– kein Hintergrund –</option>' + (others.length ? '<optgroup label="Passend">' + opts.map(opt).join('') + '</optgroup><optgroup label="Alle anderen">' + others.map(opt).join('') + '</optgroup>' : opts.map(opt).join('')) +
       (cur && !opts.some(b => b.id === cur.id) ? '<option value="' + esc(cur.id) + '" selected>' + esc(cur.n) + '</option>' : '') + '</select>' +
