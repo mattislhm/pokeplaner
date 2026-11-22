@@ -795,6 +795,49 @@
     return '<div class="live">' + Object.keys(groups).map(t => '<div class="lg"><span class="lt">' + esc(t.replace(' Raids', '').replace('-Star', '★')) + '</span>' + groups[t].map(b => b.key ? '<button class="chip boss" data-boss="' + b.key + '">' + imgId(BV[b.key].img, 'mini') + esc(b.label) + (b.shiny ? ' ✨' : '') + (BV[b.key] ? forMeTags(BV[b.key].sp.dex, b.shiny) : '') + '</button>' : '<span class="chip off">' + esc(b.name) + '</span>').join('') + '</div>').join('') +
       '<div class="muted small">Quelle: LeekDuck über ScrapedDuck · Stand ' + new Date(data.at).toLocaleString('de-AT', { dateStyle: 'short', timeStyle: 'short' }) + '</div></div>';
   }
+  // ---------- Raid: Wie viele Spieler braucht es? ----------
+  // Boss-KP, Multiplikator und Zeit pro Raid-Stufe (Bulbapedia „Raid Battle (GO)“; Mega-Legendär wie Pokebattler 22.500)
+  const RAIDTIER = { t1: ['1★', 600, 0.5974, 180], t3: ['3★', 3600, 0.73, 180], t5: ['5★', 15000, 0.79, 300], sh5: ['Crypto 5★', 15000, 0.79, 300], mega: ['Mega', 9000, 0.79, 300], megal: ['Mega-Legendär', 22500, 0.79, 300], elite: ['Elite', 20000, 0.79, 300] };
+  const FRIEND = [['', 'ohne Freundschaftsbonus', 1], ['3', 'Gute Freunde (+3 %)', 1.03], ['5', 'Superfreunde (+5 %)', 1.05], ['7', 'Hyperfreunde (+7 %)', 1.07], ['10', 'Beste Freunde (+10 %)', 1.10]];
+  function autoTier(ctx) {
+    const k = $('#rbossSel').value, data = liveBosses(), hit = data && data.list.find(b => b.key === k);
+    const t = hit ? hit.tier : '';
+    const leg = ctx.boss && ctx.boss.sp && ['L', 'M', 'U'].includes(ctx.boss.sp.cls);
+    if (/shadow/i.test(t)) return 'sh5';
+    if (/mega/i.test(t) || (ctx.boss && ctx.boss.mega)) return leg ? 'megal' : 'mega';
+    if (/^1/.test(t)) return 't1'; if (/^3/.test(t)) return 't3'; if (/^5|elite/i.test(t)) return /elite/i.test(t) ? 'elite' : 't5';
+    return leg ? 't5' : 't3';
+  }
+  function bossDpsOn(ctx, mult, att) {
+    const boss = ctx.boss, bsp = boss.sp, atkB = (boss.b[0] + 15) * mult;
+    const fs = ctx.bf ? [ctx.bf] : (bsp ? bsp.q : []), cs = ctx.bc ? [ctx.bc] : (bsp ? bsp.c : []);
+    if (!fs.length || !cs.length) return atkB / att.def * 6;
+    let sum = 0, n = 0;
+    fs.forEach(fi => cs.forEach(ci => {
+      const f = mv(fi), c = mv(ci); if (!f || !c || f.e <= 0) return;
+      const mf = x => stabT(boss.t, x.t) * eff(x.t, att.t) * wBoost(x.t, ctx.w);
+      const df = hit(f.p, atkB, att.def, mf(f)), dc = hit(c.p, atkB, att.def, mf(c));
+      const k = Math.ceil(-c.e / f.e); // Boss-Sofortattacken bis zur Lade-Attacke, je ca. 2 s Pause
+      sum += (k * df + dc) / (k * (f.d + 2) + c.d + 2); n++;
+    }));
+    return n ? sum / n : atkB / att.def * 6;
+  }
+  function raidEstimate(team, ctx, tierKey, friend) {
+    const [, hp, mult, T] = RAIDTIER[tierKey];
+    const rows = team.map(o => { const st = statsOf(o.m, o.v), bd = bossDpsOn(ctx, mult, { def: st.def, t: o.v.t }), life = st.hp / Math.max(0.1, bd); return { dps: o.r.dps, life, dmg: o.r.dps * life }; });
+    if (!rows.length) return null;
+    let time = 3, dmg = 0, faints = 0;
+    outer: for (let round = 0; round < 10; round++) {
+      for (const r of rows) {
+        if (time + r.life <= T) { dmg += r.dmg; time += r.life + 1; faints++; }
+        else { dmg += r.dps * Math.max(0, T - time); time = T; break outer; }
+      }
+      time += 15; // neu beitreten
+      if (time >= T) break;
+    }
+    dmg *= friend;
+    return { hp, T, dmg, players: hp / dmg, faints };
+  }
   function renderRaids() {
     $('#liveBosses').innerHTML = liveBossesHtml();
     const ctx = readBoss('rboss'), out = $('#raidOut');
@@ -812,6 +855,17 @@
         return '<div class="rk" data-detail="' + x.m.uid + '"><span class="rk-n">' + (i + 1) + '</span>' + imgId(x.v.img, 'spr', x.m.shiny) + '<div class="grow"><b>' + modeBadge(x.m.mode) + vName(x.v) + ' ' + monTags(x.m) + '</b><div class="sub">' + esc(mv(x.f).n) + ' / ' + esc(mv(x.r.c).n) + (x.m.fast && x.m.c1 ? '' : ' <span class="warn">(Attacken nicht eingetragen)</span>') + '</div>' + better + '</div>' +
           '<span class="dmg" title="Sortiert nach DPS und Ausdauer (TDO) zusammen">DPS ' + x.r.dps.toFixed(1) + '<small class="muted"> · TDO ' + Math.round(x.r.tdo) + '</small></span><div class="bar"><i style="width:' + Math.round(x.r.er / ref * 100) + '%"></i></div></div>';
       }).join('') + '</div>' : '<div class="empty">Noch keine Pokémon eingetragen.</div>');
+    if (team.length && !ctx.boss.virtual) {
+      const tk = state.ui.rTier && RAIDTIER[state.ui.rTier] ? state.ui.rTier : autoTier(ctx), fr = FRIEND.find(x => x[0] === (state.ui.rFriend || '')) || FRIEND[0];
+      const e = raidEstimate(team, ctx, tk, fr[2]);
+      if (e) {
+        const n = e.players, txt = n <= 1 ? (n > 0.8 ? 'Allein <b>knapp machbar</b>' : 'Das schaffst du <b>allein</b>') : 'Etwa <b>' + (Math.ceil(n * 2) / 2).toString().replace('.', ',') + ' Spieler</b> mit einem Team wie deinem';
+        html += '<div class="adv ' + (n <= 1 ? 'ok' : n <= 3 ? 'up' : 'warn') + '"><b>Spieler-Schätzung:</b> ' + txt + '. <span class="muted small2">Du allein schaffst ca. ' + Math.round(e.dmg / e.hp * 100) + ' % der ' + fmt(e.hp) + ' KP in ' + e.T + ' s (' + e.faints + '× besiegt, mit Neubeitritt).</span>' +
+          '<div class="row small2" style="margin-top:6px;gap:6px"><select id="rTier">' + '<option value="">Stufe automatisch (' + RAIDTIER[autoTier(ctx)][0] + ')</option>' + Object.keys(RAIDTIER).map(k => '<option value="' + k + '"' + (state.ui.rTier === k ? ' selected' : '') + '>' + RAIDTIER[k][0] + ' · ' + fmt(RAIDTIER[k][1]) + ' KP</option>').join('') + '</select>' +
+          '<select id="rFriend">' + FRIEND.map(x => '<option value="' + x[0] + '"' + ((state.ui.rFriend || '') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select></div>' +
+          '<div class="muted small2">Grobe Schätzung: Boss-Attacken gemittelt (oder die oben gewählten), ca. 2 s Pause zwischen seinen Attacken, kein Ausweichen, ohne Party Power.</div></div>';
+      }
+    }
     html += '<h2 class="sub">Die Besten aus der Datenbank (Lv 40, 15/15/15)</h2><div class="rank">' + topDB.map((x, i) => '<div class="rk"><span class="rk-n">' + (i + 1) + '</span>' + imgId(x.v.img) + '<div class="grow"><b>' + vName(x.v) + (x.crypto ? ' <span class="mt cr">Crypto</span>' : '') + '</b><div class="sub">' + esc(mv(x.b.f).n) + kindTag(x.v.sp, x.b.f) + ' / ' + esc(mv(x.b.c).n) + kindTag(x.v.sp, x.b.c) + (x.b.plus ? ' <span class="muted">+ ' + esc(mv(x.b.plus).n) + ' (Mega-Level 4)</span>' : '') + '</div></div><span class="dmg" title="Sortiert nach DPS und Ausdauer (TDO) zusammen">DPS ' + x.b.dps.toFixed(1) + '<small class="muted"> · TDO ' + Math.round(x.b.tdo) + '</small></span><div class="bar"><i style="width:' + Math.round(x.b.er / refDB * 100) + '%"></i></div><button class="add" data-add="' + x.v.sp.k + '" data-mode="n" data-crypto="' + (x.crypto ? 1 : '') + '" title="Hab ich">＋</button></div>').join('') + '</div>';
     const weak = weakTo(ctx.boss.t).slice(0, 4).map(TYPKEY);
     if (weak.length) html += '<h2 class="sub">Suchtexte fürs Spiel</h2>' + (team.length ? searchBox('Dein Team aus der Box', dexList(team.map(x => x.v.sp.dex)) + (team.some(x => x.m.crypto) ? '' : '&!crypto'), 'Pokédex-Nummern deiner 6. Bei mehreren gleichen nimm das mit dem höchsten WP.') : '') +
@@ -1134,6 +1188,46 @@
       (mons.length ? '<div class="evm">' + mons.map(p => '<span class="evmon"><img src="' + esc(p.img) + '" alt="">' + esc(deName(p.dex, p.name)) + forMeTags(p.dex, p.shiny) + '</span>').join('') + '</div>' : '') +
       (s && window.rhNet && window.rhNet.ics ? '<div class="eva"><button class="btn mini" data-ics="' + esc(e.eventID) + '">📅 In Kalender</button></div>' : '') + '</div></div>';
   }
+  // ---------- Lückencheck: was lohnt sich gerade für deine Box? ----------
+  // Quellen: laufende Events (Spawns, Spotlight, Community Day, Raid-Bosse), aktuelle Raid-Bosse, Hintergründe aus der Zeit der laufenden Events
+  const typeBestOwn = () => {
+    const best = {};
+    state.mons.forEach(m => { if (m.mode === 'g') return; const sp = spOf(m), v = baseVar(sp), st = statsOf(m);
+      [...new Set(chargedPool(sp).map(c => (mv(c) || {}).t).filter(Boolean))].forEach(t => { const b = bestRaidSet(v, null, { type: t, st }); if (b) (best[t] = best[t] || []).push(b.er); }); });
+    Object.keys(best).forEach(t => best[t].sort((a, b) => b - a));
+    return best;
+  };
+  function gapCheck(running) {
+    const now = Date.now(), cands = {};
+    const add = (dex, src, shiny) => { if (!dex) return; const c = cands[dex] = cands[dex] || { dex, src: new Set(), shiny: false }; c.src.add(src); if (shiny) c.shiny = true; };
+    running.forEach(e => monsOfEvent(e).forEach(p => add(p.dex, e.name, p.shiny)));
+    const lb = liveBosses(); if (lb && lb.list) lb.list.forEach(b => { if (b.key && BV[b.key] && !BV[b.key].mega) add(BV[b.key].sp.dex, 'Raid ' + String(b.tier || '').replace(' Raids', '').replace('-Star', '★'), b.shiny); });
+    // Hintergründe, die während eines laufenden Events neu sind
+    const bgNow = [];
+    if (bgData && bgData.list) running.forEach(e => { const s = evDate(e.start), en = evDate(e.end); if (!s || !en) return;
+      bgList().forEach(b => { if (b.d && b.d >= s - 864e5 && b.d <= en && !bgNow.includes(b)) bgNow.push(b); }); });
+    const own = typeBestOwn(), rows = [];
+    Object.values(cands).forEach(c => {
+      const sp = dbByDex(c.dex); if (!sp) return;
+      const mine = state.mons.filter(m => spOf(m).fam === sp.fam), tags = [];
+      if (c.shiny && !mine.some(m => m.shiny && spOf(m).dex === sp.dex) && shinyWorth(sp.dex)) tags.push('✨ Shiny fehlt');
+      if (['L', 'M', 'U'].includes(sp.cls) && !mine.some(m => hasIV(m) && ivs(m).join() === '15,15,15')) tags.push('💯 noch kein Hundo');
+      bgNow.forEach(b => { if (b.dex.concat(BG_EXTRA[b.id] || []).some(d => famDex(sp).includes(d)) && !mine.some(m => m.bg === b.id)) tags.push('🖼 Hintergrund „' + b.n + '“ fehlt'); });
+      // würde es einer deiner 3 besten Angreifer seines Typs? (Lv 40, 15/15/15 als Maßstab)
+      const v = baseVar(sp); let raidTxt = '';
+      [...new Set(chargedPool(sp).map(x => (mv(x) || {}).t).filter(Boolean))].forEach(t => { if (raidTxt) return; const b = bestRaidSet(v, null, { type: t, noElite: true }); if (!b) return;
+        const list = own[t] || [], pos = list.filter(x => x > b.er).length + 1; if (pos <= 3 && dbRankOf(t, b.er) <= 40) raidTxt = '⚔ wäre dein Nr. ' + pos + ' ' + t + '-Angreifer'; });
+      if (raidTxt) tags.push(raidTxt);
+      if (tags.length) rows.push({ sp, src: [...c.src], tags });
+    });
+    return rows.sort((a, b) => b.tags.length - a.tags.length);
+  }
+  function gapHtml(running) {
+    let rows = []; try { rows = gapCheck(running); } catch (e) { return ''; }
+    if (!rows.length) return '';
+    return '<details class="panel wide" open><summary><b>🎯 Lohnt sich gerade für dich</b> <span class="muted small2">(' + rows.length + ')</span></summary><div class="muted small2">Aus den laufenden Events und aktuellen Raids, abgeglichen mit deiner Box.</div><div class="rank">' +
+      rows.slice(0, 15).map(r => '<div class="rk">' + img(r.sp, 'spr') + '<div class="grow"><b>' + spName(r.sp) + '</b><div class="sub">' + r.tags.map(t => '<span class="fm">' + esc(t) + '</span>').join(' ') + '</div><div class="sub small2 muted">' + r.src.map(esc).join(' · ') + '</div></div></div>').join('') + '</div></details>';
+  }
   function renderEvents() {
     loadEvents();
     const tab = state.ui.evtab || 'events', out = $('#evOut');
@@ -1179,7 +1273,7 @@
     running.concat(upcoming).forEach(e => monsOfEvent(e).forEach(p => { const o = ownInfo(p.dex), k = p.dex + '|' + e.eventType; if (fdSeen.has(k)) return; if (p.shiny && shinyWorth(p.dex) && !o.shiny) { fdSeen.add(k); fd.push({ e, p, o }); } }));
     const fdHtml = fd.length ? '<h2 class="sub">💡 Für dich interessant</h2><div class="fdl">' + fd.slice(0, 16).map(x => '<a class="fdi" href="' + esc(x.e.link) + '" target="_blank"><img src="' + esc(x.p.img) + '" alt=""><div><b>' + esc(deName(x.p.dex, x.p.name)) + '</b> ' + forMeTags(x.p.dex, x.p.shiny) + '<div class="sub">' + esc(evT(x.e)[0]) + ' · ' + (evDate(x.e.start) <= now ? 'läuft bis ' + dfmt(evDate(x.e.end)) : 'ab ' + dfmt(evDate(x.e.start))) + '</div></div></a>').join('') + '</div>' : '';
     const cds = upcoming.concat(running).filter(e => e.eventType === 'community-day' && monsOfEvent(e).length);
-    out.innerHTML = aeOverview(running) + fdHtml + (cds.length ? '<h2 class="sub">🌟 Community Day: was entwickeln?</h2>' + aeTips(['spawn', 'incense', 'catch'], 'Abenteuer-Effekte für den Community Day') + cds.map(cdHelp).join('') : '') + '<h2 class="sub">🔴 Läuft gerade (' + running.length + ')</h2><div class="evgrid">' + (running.map(e => evCard(e, now)).join('') || '<div class="empty">Nichts.</div>') + '</div>' +
+    out.innerHTML = gapHtml(running) + aeOverview(running) + fdHtml + (cds.length ? '<h2 class="sub">🌟 Community Day: was entwickeln?</h2>' + aeTips(['spawn', 'incense', 'catch'], 'Abenteuer-Effekte für den Community Day') + cds.map(cdHelp).join('') : '') + '<h2 class="sub">🔴 Läuft gerade (' + running.length + ')</h2><div class="evgrid">' + (running.map(e => evCard(e, now)).join('') || '<div class="empty">Nichts.</div>') + '</div>' +
       '<h2 class="sub">📅 Demnächst (' + upcoming.length + ')</h2><div class="evgrid">' + (upcoming.slice(0, 18).map(e => evCard(e, now)).join('') || '<div class="empty">Nichts.</div>') + '</div>' +
       (undated.length ? '<h2 class="sub">Ohne Datum</h2><div class="evgrid">' + undated.map(e => evCard(e, now)).join('') + '</div>' : '') +
       '<h2 class="sub">🗓 Kalender</h2><div class="panel wide">' + cal + '</div>';
@@ -1235,6 +1329,8 @@
   const LEAGUES = { 1500: 'Superliga', 2500: 'Hyperliga', 10000: 'Meisterliga' };
   const PVMAP = window.PVMAP || {}, PVMOVES = window.PVMOVES || {};
   const PVREV = {}; Object.keys(PVMAP).forEach(id => { if (!PVREV[PVMAP[id]] || id.length < PVREV[PVMAP[id]].length) PVREV[PVMAP[id]] = id; });
+  // Crypto nur, wo es die Crypto-Form laut PvPoke wirklich gibt (z. B. keine Crypto-Urformen von Dialga/Palkia)
+  if (window.PVSHADOW) { const S = new Set(window.PVSHADOW); DB.forEach(sp => { const id = PVREV[sp.k]; if (id && sp.sh && !S.has(id)) sp.sh = 0; }); }
   const PVURL = l => 'https://raw.githubusercontent.com/pvpoke/pvpoke/master/src/data/rankings/all/overall/rankings-' + l + '.json';
   const PVCACHE = 'raidhelfer-pvp';
   let pvp = null; try { pvp = JSON.parse(localStorage.getItem(PVCACHE)); } catch (e) {}
@@ -2013,9 +2109,138 @@
 
   // ---------- Steuerung ----------
   let current = 'mine';
+  // ---------- Ratgeber: Elite-TMs und Super-Max für die eigene Box ----------
+  const dbErCache = {};
+  // Platz unter allen Pokémon der Datenbank (Lv 40, 15/15/15, Megas auf Mega-Level 4) für einen Angriffstyp
+  function dbRankOf(type, er) {
+    if (!dbErCache[type]) { const a = []; BOSSVARS.forEach(v => { const b = bestRaidSet(v, null, { type }); if (b) a.push(b.er); }); dbErCache[type] = a.sort((x, y) => y - x); }
+    return dbErCache[type].filter(x => x > er).length + 1;
+  }
+  const monTitle = m => spName(spOf(m)) + (m.crypto ? ' <span class="mt cr">Crypto</span>' : '') + ' <span class="muted small2">' + (hasIV(m) ? ivs(m).join('/') : 'IVs ?') + (statsOf(m).l ? ' · Lv ' + String(statsOf(m).l).replace('.', ',') : '') + '</span>';
+  function eliteCandidates() {
+    const fastC = [], chC = [];
+    const pvLeagues = [['all|1500', 'Superliga', 1500], ['all|2500', 'Hyperliga', 2500], ['all|10000', 'Meisterliga', 10000]];
+    state.mons.forEach(m => {
+      if (m.mode === 'g') return;
+      const sp = spOf(m), v = baseVar(sp), st = statsOf(m), has = id => [m.fast, m.c1, m.c2].includes(id);
+      const known = !!(m.fast && m.c1);
+      const curF = m.fast ? [m.fast] : sp.q, curC = [m.c1, m.c2].filter(Boolean).length ? [m.c1, m.c2].filter(Boolean) : sp.c.concat(sp.ex);
+      const best = (fs, cs) => { let b = null; fs.filter(f => !isRandomType(f)).forEach(f => { const r = raidScore(sp.t, st, f, cs, null); if (r.c && (!b || r.er > b.er)) b = Object.assign(r, { f }); }); return b; };
+      const cur = best(curF, curC); if (!cur) return;
+      const push = (arr, kind, mid, raid, pvp) => { const o = arr.find(x => x.m === m && x.mid === mid); if (o) { if (raid) o.raid = raid; if (pvp) o.pvp.push(pvp); return; } arr.push({ m, mid, raid, pvp: pvp ? [pvp] : [], known }); };
+      // Raids
+      if (sp.eq.length && !sp.eq.some(has)) { const b = best(sp.eq, curC); if (b && b.er > cur.er * 1.03) push(fastC, 'f', b.f, { gain: b.er / cur.er - 1, t: mv(b.f).t, er: b.er, other: b.c }); }
+      if (sp.ec.length && !sp.ec.some(has)) { const b = best(curF, sp.ec.concat(curC)); if (b && sp.ec.includes(b.c) && b.er > cur.er * 1.03) push(chC, 'c', b.c, { gain: b.er / cur.er - 1, t: mv(b.c).t, er: b.er, other: b.f }); }
+      // PvP: Elite-Attacke im PvPoke-Moveset einer Liga, in die das Pokémon passt
+      pvLeagues.forEach(([k, n, cap]) => {
+        const meta = metaOf(k); if (!meta.length) return;
+        const i = meta.findIndex(x => x.id === pvIdOf(m)); if (i < 0 || i >= 100) return;
+        const w = Number(m.wp) || st.cp; if (cap < 10000 && w > cap) return; if (cap >= 10000 && w < 2500) return;
+        const r = myRank(m, cap); if (r && r.rank > PV_TOP) return;
+        meta[i].ms.forEach((id, j) => { const mid = j ? pvCharged(id) : pvFast(id); if (!mid || has(mid)) return;
+          const el = j ? sp.ec.includes(mid) : sp.eq.includes(mid); if (!el) return;
+          push(j ? chC : fastC, j ? 'c' : 'f', mid, null, { n, rank: i + 1, iv: r ? r.rank : null }); });
+      });
+    });
+    const score = x => (x.raid ? x.raid.gain * 100 * Math.min(1, 40 / Math.max(1, dbRankOf(x.raid.t, x.raid.er))) : 0) + x.pvp.reduce((a, p) => a + Math.max(0, 101 - p.rank) / 10, 0);
+    const rank = arr => {
+      // pro Art nur das beste Exemplar
+      const by = {}; arr.forEach(x => { const k = x.m.k + (x.m.crypto ? '|c' : '') + '|' + x.mid; x.sc = score(x); if (!by[k] || x.sc > by[k].sc) by[k] = x; });
+      return Object.values(by).filter(x => x.sc > 0.5).sort((a, b) => b.sc - a.sc).slice(0, 10);
+    };
+    return { fast: rank(fastC), charged: rank(chC) };
+  }
+  function eliteRow(x) {
+    const why = [];
+    if (x.raid) { const r = dbRankOf(x.raid.t, x.raid.er); why.push('Raids: <b>+' + Math.round(x.raid.gain * 100) + ' %</b> Schaden, dann Platz ' + r + ' der ' + x.raid.t + '-Angreifer'); }
+    x.pvp.forEach(p => why.push(p.n + ': Platz ' + p.rank + ' der Meta, PvPoke-Moveset braucht die Attacke' + (p.iv ? ' (dein IV-Rang ' + p.iv + ')' : '')));
+    return '<div class="rk" data-goto="' + x.m.uid + '">' + img(spOf(x.m), 'spr', x.m.shiny) + '<div class="grow"><b>' + monTitle(x.m) + '</b><div class="sub">→ <b>' + esc(mv(x.mid).n) + '</b> (' + mv(x.mid).t + ')' + (x.known ? '' : ' <span class="muted">· Attacken nicht eingetragen, gilt nur, wenn es sie noch nicht hat</span>') + '</div>' + why.map(w => '<div class="sub small2">' + w + '</div>').join('') + '</div></div>';
+  }
+  function superMaxCandidates() {
+    const out = [];
+    state.mons.forEach(m => {
+      const sp = spOf(m); (sp.mg || []).forEach(g => {
+        if (!superMaxOk(sp, g.id) || Number(m.mlv) === 4) return;
+        if (m.mega && m.mega !== 'none' && m.mega !== g.id) return;
+        const v = megaVars(sp).find(x => x.mega === g.id); if (!v) return;
+        const lv = Number(m.mlv) || 1, cs = effCharged(m), f = effFast(m);
+        const st0 = statsOf(m, v), p0 = plusOf(sp, g.id, lv), r0 = raidScore(v.t, st0, f, cs.concat(p0 ? [p0] : []), null);
+        const m4 = Object.assign({}, m, { mlv: 4 }), st4 = statsOf(m4, v), p4 = plusOf(sp, g.id, 4), r4 = raidScore(v.t, st4, f, cs.concat([p4]), null);
+        if (!r0.dps || !r4.dps) return;
+        out.push({ m, v, lv, plus: p4, gain: r4.er / r0.er - 1, er: r4.er, t: mv(p4).t, unlocked: m.mega === g.id });
+      });
+    });
+    const by = {}; out.forEach(x => { const k = x.m.k + '|' + x.v.mega; if (!by[k] || x.er > by[k].er) by[k] = x; });
+    return Object.values(by).sort((a, b) => b.er * (1 + b.gain) - a.er * (1 + a.gain)).slice(0, 12);
+  }
+  function renderAdvisor() {
+    const el = $('#advisorBody'); if (!el) return;
+    let html = '';
+    try {
+      const ec = eliteCandidates();
+      html += '<h2 class="sub">Elite-Sofort-TM</h2><p class="muted small2">Wo eine Elite-Sofort-TM bei deinen Pokémon am meisten bringt. Raids: Schaden mit deinen Werten (Lv, IVs) gegen einen neutralen Boss. PvP: wenn die Attacke im PvPoke-Moveset einer Liga steht, in die das Pokémon passt.</p>' +
+        (ec.fast.length ? '<div class="rank">' + ec.fast.map(eliteRow).join('') + '</div>' : '<div class="muted">Keine lohnenden Kandidaten gefunden.</div>');
+      html += '<h2 class="sub">Elite-Lade-TM</h2>' + (ec.charged.length ? '<div class="rank">' + ec.charged.map(eliteRow).join('') + '</div>' : '<div class="muted">Keine lohnenden Kandidaten gefunden.</div>');
+      const sm = superMaxCandidates();
+      html += '<h2 class="sub">Super-Max lohnt sich</h2><p class="muted small2">Auf Super-Max (Mega-Level 4) bekommt die Mega-Form eine zusätzliche Plus-Attacke und +2 Level, solange sie Mega ist. Dafür muss das Pokémon schon auf Max sein, dann kostet es 5.000 Mega-Energie.</p>' +
+        (sm.length ? '<div class="rank">' + sm.map(x => '<div class="rk" data-goto="' + x.m.uid + '">' + imgId(x.v.img) + '<div class="grow"><b>' + vName(x.v) + ' <span class="muted small2">' + (hasIV(x.m) ? ivs(x.m).join('/') : '') + (statsOf(x.m).l ? ' · Lv ' + String(statsOf(x.m).l).replace('.', ',') : '') + '</span></b>' +
+          '<div class="sub">' + (x.unlocked ? 'jetzt Mega-Level ' + MEGALV[x.lv] : '<span class="muted">Mega bei dir nicht eingetragen</span>') + ' → Super-Max mit <b>' + esc(mv(x.plus).n) + '</b></div>' +
+          '<div class="sub small2">Raids: <b>+' + Math.round(x.gain * 100) + ' %</b> Schaden, dann Platz ' + dbRankOf(x.t, x.er) + ' der ' + x.t + '-Angreifer</div></div></div>').join('') + '</div>' : '<div class="muted">Keins deiner Pokémon kann auf Super-Max.</div>');
+    } catch (e) { html += '<div class="adv warn">Fehler im Ratgeber: ' + esc(e.message) + '</div>'; }
+    el.innerHTML = html;
+    ['all|1500', 'all|2500', 'all|10000'].forEach(k => { if (!metaOf(k).length) loadLeague(k); });
+  }
+  // ---------- Team GO Rocket: Konter aus deiner Box ----------
+  const RKCACHE = 'pokeplaner-rocket';
+  let rocket = null; try { rocket = JSON.parse(localStorage.getItem(RKCACHE)); } catch (e) {}
+  let rocketLoading = false;
+  function loadRocket(force) {
+    if (rocketLoading || (rocket && !force && Date.now() - rocket.at < 12 * 3600e3)) return;
+    rocketLoading = true;
+    fetch(SD + 'rocketLineups.json', { cache: 'no-store' }).then(r => r.json()).then(list => { rocket = { at: Date.now(), list }; try { localStorage.setItem(RKCACHE, JSON.stringify(rocket)); } catch (e) {} })
+      .catch(() => {}).finally(() => { rocketLoading = false; if (current === 'rocket') renderRocket(); });
+  }
+  const RKNAME = { Giovanni: 'Giovanni', Cliff: 'Cliff', Arlo: 'Arlo', Sierra: 'Sierra' };
+  const TEN = { Normal: 'Normal', Fire: 'Feuer', Water: 'Wasser', Electric: 'Elektro', Grass: 'Pflanze', Ice: 'Eis', Fighting: 'Kampf', Poison: 'Gift', Ground: 'Boden', Flying: 'Flug', Psychic: 'Psycho', Bug: 'Käfer', Rock: 'Gestein', Ghost: 'Geist', Dragon: 'Drache', Dark: 'Unlicht', Steel: 'Stahl', Fairy: 'Fee' };
+  const rkTitle = n => RKNAME[n] || ((/^(\w+)-type /.exec(n) || [])[1] ? TEN[/^(\w+)-type /.exec(n)[1]] + '-' : '') + (/Decoy/.test(n) ? 'Lockvogel-' : '') + (/Female/.test(n) ? 'Rüpelin' : 'Rüpel');
+  function rkSpecies(p) {
+    const dex = ldDex(p.image), m = /\.f([A-Z0-9_]+)\.icon/.exec(p.image || ''), form = m ? m[1] : '';
+    const cands = DB.filter(sp => sp.dex === dex);
+    return (form && cands.find(x => x.k.endsWith('_' + form))) || cands.find(x => !x.f) || cands[0] || null;
+  }
+  // Wertung wie im Raid-Planer, aber gegen das Crypto-Pokémon des Gegners (Werte ×1,2 Angriff); deine eigenen Attacken
+  function rkCounters(sp, n) {
+    const boss = Object.assign({}, baseVar(sp), { b: [sp.b[0] * 1.2, sp.b[1] * 5 / 6, sp.b[2]] });
+    const ctx = { boss, bt: sp.t }, rows = [];
+    state.mons.forEach(m => { if (m.mode === 'g') return; const o = raidOptionsOf(m, ctx)[0]; if (o && o.r.dps > 0) rows.push(o); });
+    const by = {}; rows.forEach(o => { const k = o.m.k + (o.m.crypto ? '|c' : ''); if (!by[k] || o.r.er > by[k].r.er) by[k] = o; });
+    return Object.values(by).sort((a, b) => b.r.er - a.r.er).slice(0, n || 3);
+  }
+  function renderRocket() {
+    loadRocket();
+    const out = $('#rocketOut'); if (!out) return;
+    if (!rocket || !rocket.list) { out.innerHTML = '<div class="empty big">Aufstellungen werden geladen …</div>'; return; }
+    const sel = state.ui.rk || 'Giovanni', who = rocket.list.find(x => x.name === sel) || rocket.list[0];
+    let html = '<div class="chips">' + rocket.list.map(x => '<button class="chip' + (x === who ? ' on' : '') + '" data-rk="' + esc(x.name) + '">' + esc(rkTitle(x.name)) + '</button>').join('') + '</div>';
+    const slots = [who.firstPokemon || [], who.secondPokemon || [], who.thirdPokemon || []];
+    const used = new Set(), team = [];
+    html += slots.map((sl, i) => {
+      if (!sl.length) return '';
+      const opts = sl.map(p => ({ p, sp: rkSpecies(p) })).filter(x => x.sp);
+      return '<h2 class="sub">' + (i + 1) + '. Pokémon' + (opts.length > 1 ? ' (eins davon)' : '') + '</h2>' + opts.map(({ p, sp }) => {
+        const cs = rkCounters(sp, 3), pick = cs.find(o => !used.has(o.m.uid));
+        if (pick && opts.length === 1) { used.add(pick.m.uid); team.push(pick); }
+        return '<div class="rk">' + img(sp, 'spr') + '<div class="grow"><b>Crypto-' + spName(sp) + (p.isEncounter ? ' <span class="fm">fangbar</span>' : '') + '</b> <span class="sub">' + sp.t.map(typeTag).join('') + '</span>' +
+          '<div class="sub">Schwach gegen: ' + weakTo(sp.t).slice(0, 4).map(typeTag).join('') + '</div>' +
+          (cs.length ? '<div class="sub">Deine besten: ' + cs.map(o => '<a data-goto="' + o.m.uid + '">' + vName(o.v) + ' <span class="muted small2">(' + esc(mv(o.f).n) + ' / ' + esc(mv(o.r.c || o.best.c).n) + ')</span></a>').join(', ') + '</div>' : '<div class="sub muted">Keine passenden Pokémon in deiner Box.</div>') + '</div></div>';
+      }).join('');
+    }).join('');
+    html += '<div class="muted small2" style="margin-top:8px">Rocket-Kämpfe laufen wie Trainerkämpfe mit Schutzschilden. Die Reihenfolge hier rechnet mit Schaden und Ausdauer gegen das Crypto-Pokémon (×1,2 Angriff), nicht mit einer vollen PvP-Simulation. Quelle: LeekDuck über ScrapedDuck, Stand ' + new Date(rocket.at).toLocaleString('de-AT', { dateStyle: 'short', timeStyle: 'short' }) + '.</div>';
+    out.innerHTML = html;
+  }
   function renderAll() {
     renderSide();
-    ({ overview: renderOverview, mine: renderMine, team: renderTeam, ranking: renderRanking, raids: renderRaids, rranking: renderRRanking, events: renderEvents, settings: () => { renderSources(); renderNotifSettings(); renderBackup(); renderSubs(); }, cleanup: renderCleanup, pvp: renderPvp }[current] || (() => {}))();
+    ({ overview: renderOverview, mine: renderMine, team: renderTeam, ranking: renderRanking, advisor: renderAdvisor, rocket: renderRocket, raids: renderRaids, rranking: renderRRanking, events: renderEvents, settings: () => { renderSources(); renderNotifSettings(); renderBackup(); renderSubs(); }, cleanup: renderCleanup, pvp: renderPvp }[current] || (() => {}))();
   }
   function show(v) {
     if (v === 'mine' && current !== 'mine') mineFreeze = { cfg: '', order: [] };
@@ -2030,7 +2255,7 @@
   const monBy = uid => state.mons.find(m => m.uid === Number(uid));
   function goto(uid) { showDetail(uid); }
   document.addEventListener('click', e => {
-    const t = e.target.closest('[data-pvclear],[data-pvslot],[data-pvclose],[data-pvchoose],[data-synccopy],[data-syncnow],[data-syncoff],[data-syncset],[data-bgreload],[data-scflag],[data-scall],[data-scdel],[data-scsave],[data-scclear],[data-allbg],[data-league],[data-build],[data-usesugg],[data-clearteam],[data-copy],[data-ics],[data-nt],[data-toggle],[data-tagt],[data-tagf],[data-tagdel],[data-evm],[data-evf],[data-evtab],[data-ivset],[data-hundo],[data-pick],[data-add],[data-tog],[data-del],[data-open],[data-goto],[data-detail],[data-mode-set],[data-show2],[data-mf],[data-mlgmore],[data-pf],[data-boss],.card');
+    const t = e.target.closest('[data-pvclear],[data-pvslot],[data-pvclose],[data-pvchoose],[data-synccopy],[data-syncnow],[data-syncoff],[data-syncset],[data-bgreload],[data-scflag],[data-scall],[data-scdel],[data-scsave],[data-scclear],[data-allbg],[data-league],[data-build],[data-usesugg],[data-clearteam],[data-copy],[data-ics],[data-nt],[data-toggle],[data-tagt],[data-tagf],[data-tagdel],[data-evm],[data-evf],[data-evtab],[data-ivset],[data-hundo],[data-pick],[data-add],[data-tog],[data-del],[data-open],[data-goto],[data-detail],[data-mode-set],[data-show2],[data-mf],[data-rk],[data-mlgmore],[data-pf],[data-boss],.card');
     if (!t) return;
     if (t.dataset.pick) { const m = addMon(t.dataset.pick); closePicker(); showDetail(m.uid); return; }
     if (t.dataset.add) { const m = addMon(t.dataset.add, t.dataset.mode); if (t.dataset.crypto) m.crypto = true; save(); showDetail(m.uid); return; }
@@ -2067,6 +2292,7 @@
     if (t.dataset.ivset) { const m = monBy(t.dataset.uid), i = Number(t.dataset.i), v = Number(t.dataset.ivset); m.iv[i] = v; if (m.lvl) { const w = wpFor(m); if (w) m.wp = w; } else { const l = levelFromWp(m); if (l) { m.lvl = l; m.lvlSrc = 'wp'; } } save(); renderAll(); return; }
     if (t.dataset.hundo) { const m = monBy(t.dataset.hundo); m.iv = [15, 15, 15]; if (m.lvl) { const w = wpFor(m); if (w) m.wp = w; } save(); renderAll(); return; }
     if (t.dataset.mlgmore) { const g = t.dataset.mlgmore, a = new Set(state.ui.mlgMore || []); a.has(g) ? a.delete(g) : a.add(g); state.ui.mlgMore = [...a]; save(); mineFreeze.cfg = null; renderMine(); return; }
+    if (t.dataset.rk) { state.ui.rk = t.dataset.rk; save(); renderRocket(); return; }
     if (t.dataset.mf) { state.ui.mf = state.ui.mf || {}; state.ui.mf[t.dataset.mf] = !state.ui.mf[t.dataset.mf]; save(); renderMine(); return; }
     if (t.dataset.pf) { state.ui.pf = state.ui.pf || {}; state.ui.pf[t.dataset.pf] = !state.ui.pf[t.dataset.pf]; save(); renderPicker(); return; }
     if (t.dataset.boss) { $('#rbossSel').value = t.dataset.boss; $('#rbossT1').value = ''; $('#rbossT2').value = ''; state.rboss = t.dataset.boss; fillBossMoves('rboss'); save(); renderRaids(); return; }
@@ -2129,6 +2355,7 @@
     $('#' + p + 'W').addEventListener('input', () => { state[p + 'W'] = $('#' + p + 'W').value; save(); fn(); });
     ['F', 'C'].forEach(x => $('#' + p + x).addEventListener('input', fn));
   });
+  document.addEventListener('input', e => { if (e.target.id === 'rTier') { state.ui.rTier = e.target.value; save(); renderRaids(); } else if (e.target.id === 'rFriend') { state.ui.rFriend = e.target.value; save(); renderRaids(); } });
   $('#backupOpen').addEventListener('click', () => { if (window.rhNet && window.rhNet.openBackup) window.rhNet.openBackup(); });
   $('#evReload').addEventListener('click', () => { evData = null; news = null; renderEvents(); loadEvents(true); loadNews(true); });
   document.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.notif; if (!k) return; const n = notifSettings(); if (k === 'on') { n.on = e.target.checked; if (n.on) { loadEvents(); try { Notification.requestPermission(); } catch (er) {} } } else n.lead = Number(e.target.value); save(); renderNotifSettings(); checkNotifs(); });

@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <title>PokéPlaner</title>
-<link rel="stylesheet" href="style.css?v=1795344503">
+<link rel="stylesheet" href="style.css?v=1795344980">
 </head>
 <body>
 <div class="app">
@@ -25,7 +25,7 @@
         <div class="brand-sub">Pokémon GO</div>
       </div>
     </div>
-    <nav><button class="nav active" data-view="mine">Meine Pokémon</button><button class="nav" data-view="cleanup">Aufräumen</button><button class="nav" data-view="events">News &amp; Events</button></nav>
+    <nav><button class="nav active" data-view="mine">Meine Pokémon</button><button class="nav" data-view="cleanup">Aufräumen</button><button class="nav" data-view="events">News &amp; Events</button><button class="nav" data-view="advisor">Ratgeber</button></nav>
     <div class="cat">
       <div class="cat-h">Dyna-Kämpfe</div>
       <nav>
@@ -43,6 +43,7 @@
       <nav>
         <button class="nav" data-view="raids">Team-Planer</button>
         <button class="nav" data-view="rranking">Rangliste</button>
+        <button class="nav" data-view="rocket">Team Rocket</button>
       </nav>
     </div>
     <nav class="bottom-nav"><button class="nav" data-view="settings">Einstellungen</button></nav>
@@ -189,6 +190,16 @@
       <div id="rrankList"></div>
     </section>
 
+    <section class="view" id="view-advisor">
+      <header class="vh"><h1>Ratgeber</h1><p class="muted">Wo Elite-TMs und Mega-Energie bei deinen Pokémon am meisten bringen. Klick auf ein Pokémon öffnet es.</p></header>
+      <div id="advisorBody"></div>
+    </section>
+
+    <section class="view" id="view-rocket">
+      <header class="vh"><h1>Team GO Rocket</h1><p class="muted">Aktuelle Aufstellungen und deine besten Konter dafür.</p></header>
+      <div id="rocketOut"></div>
+    </section>
+
     <section class="view" id="view-settings">
       <header class="vh"><h1>Einstellungen</h1></header>
       <div class="panel">
@@ -257,11 +268,11 @@
   </div>
 </div>
 
-<script src="shim.js?v=1795344503"></script>
+<script src="shim.js?v=1795344980"></script>
 <script src="vendor/qrcode.js"></script>
-<script src="data.js?v=1795344503"></script>
-<script src="data_pvp.js?v=1795344503"></script>
-<script src="data_pool.js?v=1795344503"></script>
-<script src="app.js?v=1795344503"></script>
+<script src="data.js?v=1795344980"></script>
+<script src="data_pvp.js?v=1795344980"></script>
+<script src="data_pool.js?v=1795344980"></script>
+<script src="app.js?v=1795344980"></script>
 </body>
 </html>
