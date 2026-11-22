@@ -28,8 +28,8 @@
   // Signaturattacken der Urformen (in den Spieldaten vorhanden, aber nicht verknüpft): bekommen sie beim Formwechsel
   MOVES.ROAR_OF_TIME = MOVES.ROAR_OF_TIME || ['Roar of Time', 'Drache', 160, 2, -100, 'Zeitenlärm'];
   MOVES.SPACIAL_REND = MOVES.SPACIAL_REND || ['Spacial Rend', 'Drache', 160, 2.5, -100, 'Raumschlag'];
-  // Kowtow Cleave (Gladimperio, Community Day Nov. 2026): Raids 85 Stärke / 50 Energie / 2 s. Deutscher Name noch nicht bestätigt
-  MOVES.KOWTOW_CLEAVE = MOVES.KOWTOW_CLEAVE || ['Kowtow Cleave', 'Unlicht', 85, 2, -50, 'Kowtow Cleave'];
+  // Kowtow Cleave (Gladimperio, Community Day Nov. 2026): Raids 85 Stärke / 50 Energie / 2 s. deutsch Kniefallspalter (BisaFans)
+  MOVES.KOWTOW_CLEAVE = MOVES.KOWTOW_CLEAVE || ['Kowtow Cleave', 'Unlicht', 85, 2, -50, 'Kniefallspalter'];
   if (SP.KINGAMBIT) { ['KOWTOW_CLEAVE'].forEach(mid => { if (!SP.KINGAMBIT.ex.includes(mid)) SP.KINGAMBIT.ex.push(mid); }); if (MOVES.LOW_KICK_FAST && !SP.KINGAMBIT.q.includes('LOW_KICK_FAST')) SP.KINGAMBIT.q.push('LOW_KICK_FAST'); }
   [['DIALGA_ORIGIN', 'ROAR_OF_TIME'], ['PALKIA_ORIGIN', 'SPACIAL_REND']].forEach(([k, mid]) => { if (SP[k] && !SP[k].ex.includes(mid)) SP[k].ex.push(mid); });
   // Weitere Attacken, die in den Spieldaten-Werten fehlen (Werte aus dem Game Master)
