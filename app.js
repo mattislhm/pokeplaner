@@ -2170,8 +2170,14 @@
         out.push({ m, v, lv, plus: p4, gain: r4.er / r0.er - 1, er: r4.er, t: mv(p4).t, unlocked: m.mega === g.id });
       });
     });
-    const by = {}; out.forEach(x => { const k = x.m.k + '|' + x.v.mega; if (!by[k] || x.er > by[k].er) by[k] = x; });
-    return Object.values(by).sort((a, b) => b.er * (1 + b.gain) - a.er * (1 + a.gain)).slice(0, 12);
+    // Nur empfehlen, wenn du für diesen Angriffstyp noch keine bessere Mega hast (und pro Typ nur die beste)
+    const ownMegaBest = t => { let best = 0, who = null; state.mons.forEach(m => { if (!m.mega || m.mega === 'none') return; const v = megaVars(spOf(m)).find(x => x.mega === m.mega); if (!v) return;
+      const b = bestRaidSet(v, null, { type: t, st: statsOf(m, v), mlv: Number(m.mlv) || 1 }); if (b && b.er > best) { best = b.er; who = { m, v }; } }); return { best, who }; };
+    const byType = {};
+    out.forEach(x => { x.er4t = (bestRaidSet(x.v, null, { type: x.t, st: statsOf(Object.assign({}, x.m, { mlv: 4 }), x.v), mlv: 4 }) || { er: x.er }).er;
+      if (!byType[x.t] || x.er4t > byType[x.t].er4t) byType[x.t] = x; });
+    return Object.values(byType).filter(x => { const o = ownMegaBest(x.t); x.beats = o.who; return x.er4t > o.best * 1.02; })
+      .sort((a, b) => b.er4t * (1 + b.gain) - a.er4t * (1 + a.gain)).slice(0, 12);
   }
   function renderAdvisor() {
     const el = $('#advisorBody'); if (!el) return;
@@ -2182,10 +2188,10 @@
         (ec.fast.length ? '<div class="rank">' + ec.fast.map(eliteRow).join('') + '</div>' : '<div class="muted">Keine lohnenden Kandidaten gefunden.</div>');
       html += '<h2 class="sub">Elite-Lade-TM</h2>' + (ec.charged.length ? '<div class="rank">' + ec.charged.map(eliteRow).join('') + '</div>' : '<div class="muted">Keine lohnenden Kandidaten gefunden.</div>');
       const sm = superMaxCandidates();
-      html += '<h2 class="sub">Super-Max lohnt sich</h2><p class="muted small2">Auf Super-Max (Mega-Level 4) bekommt die Mega-Form eine zusätzliche Plus-Attacke und +2 Level, solange sie Mega ist. Dafür muss das Pokémon schon auf Max sein, dann kostet es 5.000 Mega-Energie.</p>' +
+      html += '<h2 class="sub">Super-Max lohnt sich</h2><p class="muted small2">Auf Super-Max (Mega-Level 4) bekommt die Mega-Form eine zusätzliche Plus-Attacke und +2 Level, solange sie Mega ist. Dafür muss das Pokémon schon auf Max sein, dann kostet es 5.000 Mega-Energie. Gezeigt wird pro Angriffstyp nur die beste Option, und nur wenn du für diesen Typ noch keine stärkere Mega hast.</p>' +
         (sm.length ? '<div class="rank">' + sm.map(x => '<div class="rk" data-goto="' + x.m.uid + '">' + imgId(x.v.img) + '<div class="grow"><b>' + vName(x.v) + ' <span class="muted small2">' + (hasIV(x.m) ? ivs(x.m).join('/') : '') + (statsOf(x.m).l ? ' · Lv ' + String(statsOf(x.m).l).replace('.', ',') : '') + '</span></b>' +
           '<div class="sub">' + (x.unlocked ? 'jetzt Mega-Level ' + MEGALV[x.lv] : '<span class="muted">Mega bei dir nicht eingetragen</span>') + ' → Super-Max mit <b>' + esc(mv(x.plus).n) + '</b></div>' +
-          '<div class="sub small2">Raids: <b>+' + Math.round(x.gain * 100) + ' %</b> Schaden, dann Platz ' + dbRankOf(x.t, x.er) + ' der ' + x.t + '-Angreifer</div></div></div>').join('') + '</div>' : '<div class="muted">Keins deiner Pokémon kann auf Super-Max.</div>');
+          '<div class="sub small2">Raids: <b>+' + Math.round(x.gain * 100) + ' %</b> Schaden, dann Platz ' + dbRankOf(x.t, x.er4t) + ' der ' + x.t + '-Angreifer' + (x.beats ? ', stärker als deine ' + vName(x.beats.v) : ', deine erste ' + x.t + '-Mega') + '</div>' + (statsOf(x.m).l && statsOf(x.m).l < 40 ? '<div class="sub small2 muted">Rechnung mit deinem jetzigen Level ' + String(statsOf(x.m).l).replace('.', ',') + '. Hochleveln bringt zusätzlich mehr.</div>' : '') + '</div></div>').join('') + '</div>' : '<div class="muted">Nichts, was deine Megas noch verbessern würde.</div>');
     } catch (e) { html += '<div class="adv warn">Fehler im Ratgeber: ' + esc(e.message) + '</div>'; }
     el.innerHTML = html;
     ['all|1500', 'all|2500', 'all|10000'].forEach(k => { if (!metaOf(k).length) loadLeague(k); });
