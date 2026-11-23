@@ -2179,6 +2179,32 @@
     return Object.values(byType).filter(x => { const o = ownMegaBest(x.t); x.beats = o.who; return x.er4t > o.best * 1.02; })
       .sort((a, b) => b.er4t * (1 + b.gain) - a.er4t * (1 + a.gain)).slice(0, 12);
   }
+  // ---------- Kronkorken (Super-Spezialtraining) ----------
+  // Silberkronkorken: ein Wert auf 15. Goldkronkorken: alle drei. Nicht für Crypto und Pokémon mit 4 Sternen; Pokémon muss Guter Kumpel sein.
+  function capCandidates() {
+    const silver = [], gold = [];
+    state.mons.forEach(m => {
+      if (m.crypto || !hasIV(m)) return; const iv = ivs(m); if (iv.join() === '15,15,15') return;
+      const sp = spOf(m), leg = ['L', 'M', 'U'].includes(sp.cls), v = baseVar(sp);
+      let raid = 0, rt = ''; try { const b = bestRaidSet(v, null, { st: statsOf(Object.assign({}, m, { iv: [15, 15, 15] })) }); if (b) { rt = mv(b.c).t; raid = Math.max(0, 41 - dbRankOf(rt, b.er)); } } catch (e) {}
+      const val = raid + (m.shiny ? 25 : 0) + (m.bg ? 15 : 0) + (leg ? 10 : 0) + (m.lucky ? 5 : 0);
+      const why = [m.shiny && 'Shiny', m.bg && 'Hintergrund', leg && 'Legendär', raid > 20 && 'starker ' + rt + '-Angreifer'].filter(Boolean);
+      const miss = iv.filter(x => x < 15).length;
+      if (miss === 1) silver.push({ m, val, why, stat: ['Angriff', 'Verteidigung', 'KP'][iv.findIndex(x => x < 15)] });
+      if (miss >= 2 && val >= 25) gold.push({ m, val: val + (45 - iv[0] - iv[1] - iv[2]) / 3, why });
+    });
+    const top = a => a.sort((x, y) => y.val - x.val).slice(0, 8);
+    return { silver: top(silver), gold: top(gold) };
+  }
+  function capHtml() {
+    const c = capCandidates(), row = (x, extra) => '<div class="rk" data-goto="' + x.m.uid + '">' + img(spOf(x.m), 'spr', x.m.shiny) + '<div class="grow"><b>' + monTitle(x.m) + '</b><div class="sub">' + extra + (x.why.length ? ' · ' + x.why.join(', ') : '') + '</div></div></div>';
+    return '<h2 class="sub">Kronkorken (Super-Spezialtraining)</h2><p class="muted small2">Silberkronkorken bringt einen Wert auf 15, Goldkronkorken alle drei. Geht nicht bei Crypto-Pokémon und Pokémon mit 4 Sternen, das Pokémon muss mindestens Guter Kumpel sein. Achtung: Die WP steigen mit, für Super- und Hyperliga kann das schaden.</p>' +
+      searchBox('Silberkronkorken: nur ein Wert fehlt zu 100 %', '4Angriffs-Wert,4Verteidigungs-Wert&4Angriffs-Wert,4KP&4Verteidigungs-Wert,4KP&!4*&!Crypto') +
+      searchBox('Silberkronkorken: dasselbe nur für Shinys', '4Angriffs-Wert,4Verteidigungs-Wert&4Angriffs-Wert,4KP&4Verteidigungs-Wert,4KP&!4*&!Crypto&Schillernd') +
+      searchBox('Goldkronkorken: Shiny-Legendäre ohne 100 %', 'Schillernd&Legendär,Mysteriös,Ultrabestie&!4*&!Crypto') +
+      '<h3 class="sub small">Silberkronkorken: deine besten Kandidaten</h3>' + (c.silver.length ? '<div class="rank">' + c.silver.map(x => row(x, x.stat + ' auf 15 → 100 %')).join('') + '</div>' : '<div class="muted">Kein Pokémon, dem nur ein Wert fehlt.</div>') +
+      '<h3 class="sub small">Goldkronkorken: deine besten Kandidaten</h3>' + (c.gold.length ? '<div class="rank">' + c.gold.map(x => row(x, 'alle Werte auf 15')).join('') + '</div>' : '<div class="muted">Keine besonderen Kandidaten.</div>');
+  }
   function renderAdvisor() {
     const el = $('#advisorBody'); if (!el) return;
     let html = '';
@@ -2192,6 +2218,7 @@
         (sm.length ? '<div class="rank">' + sm.map(x => '<div class="rk" data-goto="' + x.m.uid + '">' + imgId(x.v.img) + '<div class="grow"><b>' + vName(x.v) + ' <span class="muted small2">' + (hasIV(x.m) ? ivs(x.m).join('/') : '') + (statsOf(x.m).l ? ' · Lv ' + String(statsOf(x.m).l).replace('.', ',') : '') + '</span></b>' +
           '<div class="sub">' + (x.unlocked ? 'jetzt Mega-Level ' + MEGALV[x.lv] : '<span class="muted">Mega bei dir nicht eingetragen</span>') + ' → Super-Max mit <b>' + esc(mv(x.plus).n) + '</b></div>' +
           '<div class="sub small2">Raids: <b>+' + Math.round(x.gain * 100) + ' %</b> Schaden, dann Platz ' + dbRankOf(x.t, x.er4t) + ' der ' + x.t + '-Angreifer' + (x.beats ? ', stärker als deine ' + vName(x.beats.v) : ', deine erste ' + x.t + '-Mega') + '</div>' + (statsOf(x.m).l && statsOf(x.m).l < 40 ? '<div class="sub small2 muted">Rechnung mit deinem jetzigen Level ' + String(statsOf(x.m).l).replace('.', ',') + '. Hochleveln bringt zusätzlich mehr.</div>' : '') + '</div></div>').join('') + '</div>' : '<div class="muted">Nichts, was deine Megas noch verbessern würde.</div>');
+      html += capHtml();
     } catch (e) { html += '<div class="adv warn">Fehler im Ratgeber: ' + esc(e.message) + '</div>'; }
     el.innerHTML = html;
     ['all|1500', 'all|2500', 'all|10000'].forEach(k => { if (!metaOf(k).length) loadLeague(k); });
@@ -2445,7 +2472,7 @@
     else { b.dataset.confirm = '1'; b.textContent = 'Wirklich? Nochmal klicken'; setTimeout(() => { b.textContent = 'Alles zurücksetzen'; delete b.dataset.confirm; }, 3000); }
   });
 
-  window.__rh = { loadBulba, bgList, bgsFor, addMon, statsOf, bestRaidSet, bestMaxFast, raidScore, maxDmg, plan, roleOf, levelCost, importCSV, pickTeam, mapLive, state: () => state, SP, BV, renderAll, show, showDetail, MAXCANDS };
+  window.__rh = { BOSSVARS, eff, mv, loadBulba, bgList, bgsFor, addMon, statsOf, bestRaidSet, bestMaxFast, raidScore, maxDmg, plan, roleOf, levelCost, importCSV, pickTeam, mapLive, state: () => state, SP, BV, renderAll, show, showDetail, MAXCANDS };
   save();
   show('mine');
 })();
