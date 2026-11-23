@@ -127,7 +127,7 @@
     const now = Date.now(), cur = {}; state.del = state.del || {};
     state.mons.forEach(m => { const j = monSig(m); cur[m.uid] = j; if (stampMap && !silent && stampMap[m.uid] !== j) m.upd = now; });
     if (stampMap && !silent) Object.keys(stampMap).forEach(u => { if (!cur[u]) state.del[u] = now; });
-    const g = JSON.stringify([state.tags || [], state.tol]); if (stampG !== null && g !== stampG && !silent) state.gupd = now; stampG = g;
+    const g = JSON.stringify([state.tags || [], state.tol, state.wants || []]); if (stampG !== null && g !== stampG && !silent) state.gupd = now; stampG = g;
     stampMap = cur;
   }
   stamp(true);
@@ -136,7 +136,7 @@
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     if (silent !== true) syncSoon();
     clearTimeout(backupTimer);
-    backupTimer = setTimeout(() => { if (window.rhNet && window.rhNet.backup) window.rhNet.backup(JSON.stringify(state)).then(r => { lastBackup = r; if (current === 'settings') renderBackup(); }).catch(() => {}); }, 4000);
+    backupTimer = setTimeout(() => { if (window.rhNet && window.rhNet.backup) window.rhNet.backup(JSON.stringify(Object.assign({}, state, { _diag: { at: Date.now(), bgDitto: bgData && bgData.list ? bgData.list.length : 0, bgBulba: bgData && bgData.bp ? bgData.bp.length : 0, bulbaAt: bgData && bgData.bpAt || 0 } }))).then(r => { lastBackup = r; if (current === 'settings') renderBackup(); }).catch(() => {}); }, 4000);
   };
   let lastBackup = null;
   function renderBackup() {
@@ -512,6 +512,39 @@
     if (isMaxMode(m)) ['ma', 'mg', 'ms'].forEach(k => { let c = {}; for (let i = m[k]; i < 3; i++) c = addCost(c, maxStepCost(sp, k, i)); if (m[k] < 3) rows.push('<tr><td>' + MOVE_NAMES[k] + ' auf Max</td><td>' + fmtCost(c) + '</td></tr>'); });
     return rows.length ? '<table class="ctab">' + rows.join('') + '</table>' + (m.lucky ? '<div class="muted small">Glücks-Pokémon: halber Sternenstaub ist eingerechnet.</div>' : '') : '<div class="muted small">Voll ausgebaut.</div>';
   }
+  // ---------- Spitznamen für Pokémon GO ----------
+  // Max. 12 Zeichen. Nur Textzeichen, keine bunten Emojis (die zeigt Pokémon GO nicht an): Ziffern, Buchstaben, ⓪–⑮, ★, ✓.
+  const CIRC = ['⓪', '①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩', '⑪', '⑫', '⑬', '⑭', '⑮'];
+  const NICK_MAX = 12;
+  const nickLen = s => [...s].length;
+  function nickFit(name, tail) { const n = name.replace(/\s+/g, ''), t = tail.trim(); if (nickLen(n) + 1 + nickLen(t) <= NICK_MAX) return n + ' ' + t; return [...n].slice(0, Math.max(0, NICK_MAX - nickLen(t))).join('') + t; }
+  function nickOptions(m) {
+    const sp = spOf(m), name = sp.de, out = [];
+    if (hasIV(m)) {
+      const iv = ivs(m), pct = Math.round((iv[0] + iv[1] + iv[2]) / 45 * 100), hundo = pct === 100;
+      out.push(['IV kurz', nickFit(name, iv.map(x => CIRC[x]).join(''))]);
+      out.push(['IV in %', nickFit(name, hundo ? '★100' : String(pct))]);
+      out.push(['IV mit Strich', nickFit(name, iv.join('/'))]);
+      // PvP: Liga mit IV-Rang, ✓ wenn fertig
+      const tags = [];
+      [[1500, 'GL'], [2500, 'UL'], [10000, 'ML']].forEach(([cap, lg]) => {
+        const w = Number(m.wp) || statsOf(m).cp; if (cap < 10000 && w > cap) return;
+        const meta = metaOf('all|' + cap); if (meta.length && !meta.some(x => x.id === pvIdOf(m))) return;
+        const r = myRank(m, cap); if (!r || r.rank > 100) return;
+        let ok = false; try { ok = pvStatus(m, { key: 'all|' + cap, cp: cap }).ok; } catch (e) {}
+        tags.push(lg + r.rank + (ok ? '✓' : ''));
+      });
+      if (tags.length) out.push(['PvP', nickFit(name, tags[0])]);
+      if (tags.length > 1) out.push(['PvP alle Ligen', nickFit(name, tags.join(''))]);
+    }
+    // Raid: Typ-Kürzel und Platz in der Datenbank
+    try { const v = baseVar(sp), b = bestRaidSet(v, null, { st: statsOf(m) }); if (b) { const t = mv(b.c).t, r = dbRankOf(t, b.er); if (r <= 50) out.push(['Raid', nickFit(name, t.slice(0, 3) + r)]); } } catch (e) {}
+    return out.filter(o => nickLen(o[1]) <= NICK_MAX);
+  }
+  function nickBlock(m) {
+    const o = nickOptions(m); if (!o.length) return '';
+    return '<h3 class="h3">Spitzname fürs Spiel</h3><div class="nicks">' + o.map(([l, n]) => '<div class="nick"><span class="muted small2">' + l + '</span><code>' + esc(n) + '</code><span class="muted small2">' + nickLen(n) + '/12</span><button class="btn mini" data-copy="' + esc(n) + '">Kopieren</button></div>').join('') + '</div><div class="muted small2">GL/UL/ML mit IV-Rang, ✓ = fertig gebaut. Raid: Angriffstyp und Platz unter allen Angreifern.</div>';
+  }
   function monDetail(m) {
     const sp = spOf(m), st = statsOf(m), role = roleOf(m), p = plan(m, role), r = ivRating(m, role === 'att' || role === 'raid');
     const sel = (k, min) => '<select data-k="' + k + '" data-uid="' + m.uid + '">' + [0, 1, 2, 3].filter(v => v >= min).map(v => '<option value="' + v + '"' + (m[k] === v ? ' selected' : '') + '>' + (v === 0 ? '–' : v === 3 ? 'Max' : v) + '</option>').join('') + '</select>';
@@ -557,6 +590,7 @@
       '<div class="mon-next ' + (p.next ? '' : 'done') + '">' + (p.next ? '➜ ' + esc(p.next.txt) + ' <span class="muted">· ' + esc(p.next.cost) + '</span>' : '✔ Fertig ausgebaut') + '</div>' +
       (m.caught || m.where ? '<div class="muted small2" style="margin-top:6px">Gefangen ' + (m.caught ? m.caught.split('-').reverse().join('.') : '') + (m.where ? ' in der Nähe von ' + esc(m.where) : '') + '</div>' : '') +
       '<h3 class="h3">PvP</h3><div class="pvd">' + [1500, 2500, 10000].map(l => { const r = myRank(m, l), el = eligible(m, l); return '<div><b>' + LEAGUES[l] + '</b><span>' + (!el ? 'WP über Limit' : r ? 'Rang ' + r.rank + ' (' + r.pct.toFixed(1) + '%)' + (l < 10000 ? ' · Lv ' + String(r.l).replace('.', ',') + ' = ' + fmt(r.cp) + ' WP' : '') : 'IVs fehlen') + '</span></div>'; }).join('') + '</div>' +
+      nickBlock(m) +
       '<h3 class="h3">Ortshintergrund</h3>' + bgBlock(m) +
       '<h3 class="h3">Eigene Markierungen</h3><div class="chips">' + ((state.tags || []).length ? state.tags.map(tg => '<button class="chip' + ((m.tags || []).includes(tg) ? ' on' : '') + '" data-tagt="' + esc(tg) + '" data-uid="' + m.uid + '">🏷 ' + esc(tg) + '</button>').join('') : '<span class="muted small2">Lege oben bei den Filtern eigene Markierungen an (z. B. „Tauschen“, „PvP“).</span>') + '</div>' +
       '<h3 class="h3">Kosten</h3>' + costBlock(m) +
@@ -755,6 +789,18 @@
       (heal ? row(heal.m, 'Heiler, Dyna-Kampfgeist') : '') +
       '<div class="adv ' + (hard ? 'up' : 'ok') + '">' + (hard ? '💚 Starker Boss: nimm einen Heiler (Dyna-Kampfgeist) mit oder spielt zu zweit mit Heiler.' : '⚔ Eher schwacher Boss: lieber mehr Angreifer, Heiler ist optional.') + '</div>' +
       '<div class="sub small">Beste Tanks gegen diesen Boss: ' + bestTanks.map(x => spName(x.sp) + ' (' + Math.round(x.p) + ')').join(', ') + '</div></div></div>';
+    // Lader: füllen die Dyna-Leiste schnell (viele schnelle Sofort-Attacken) und halten dabei genug aus
+    const chg = maxMons().map(m => { const f = mv(effFast(m)), st = statsOf(m); if (!f || !f.d) return null;
+      const dps = hit(f.p, st.atk, bdef, stabT(spOf(m).t, f.t) * eff(f.t, bt) * wBoost(f.t, ctx.w)) / f.d;
+      return { m, f, dps, sc: dps * Math.sqrt(tankPct(spOf(m).t, st, ctx) / 100) / Math.sqrt(f.d) }; }).filter(Boolean).sort((a, b) => b.sc - a.sc);
+    const seenSp = new Set(), chgPick = chg.filter(x => !used.has(x.m.uid) && (!tank || x.m.uid !== tank.m.uid) && (!heal || x.m.uid !== heal.m.uid) && !seenSp.has(x.m.k) && seenSp.add(x.m.k)).slice(0, 2);
+    html += '<div class="two"><div><h2 class="sub">⚡ Lader (Dyna-Leiste schnell füllen)</h2>' + (chgPick.length ? chgPick.map(x => row(x.m, esc(x.f.n) + ' · ' + x.f.d + ' s pro Attacke · ' + x.dps.toFixed(1) + ' Schaden/s')).join('') : '<div class="empty">Keine passenden.</div>') + '</div>';
+    // Plan für eine volle Lobby (4 Spieler, je 3 Pokémon)
+    const plan4 = hard ? [['2', 'Angreifer', 'machen in der Dyna-Phase den Schaden'], ['1', 'Tank', 'startet und blockt mit Dyna-Wall'], ['1', 'Heiler', 'Dyna-Kampfgeist, hält alle am Leben']]
+      : [['3', 'Angreifer', 'schneller Sieg'], ['1', 'Tank oder Lader', 'füllt die Leiste, hält Treffer aus']];
+    html += '<div><h2 class="sub">👥 Plan für eine 4er-Lobby</h2><div class="panel">' + plan4.map(([n, r, w]) => '<div><b>' + n + '× ' + r + '</b> <span class="muted small2">' + w + '</span></div>').join('') +
+      '<div class="sub small2" style="margin-top:6px">Deine 3 dafür: ' + [pick[0] && 'Angreifer ' + spName(spOf(pick[0].m)), tank && 'Tank ' + spName(spOf(tank.m)), hard && heal ? 'Heiler ' + spName(spOf(heal.m)) : (chgPick[0] && 'Lader ' + spName(spOf(chgPick[0].m)))].filter(Boolean).join(' · ') + '</div>' +
+      '<div class="muted small2">Jeder Spieler bringt 3 Pokémon. Die Rolle entscheidet, wen ihr zum Start reinschickt und wen ihr in der Dyna-Phase einwechselt.</div></div></div></div>';
     html += '<h2 class="sub">Beste Angreifer aus der Datenbank gegen diesen Boss</h2><div class="rank">' + bestDB.map((y, i) => '<div class="rk"><span class="rk-n">' + (i + 1) + '</span>' + img(y.x.sp) + '<div class="grow"><b>' + modeBadge(y.x.mode) + spName(y.x.sp) + '</b><div class="sub">' + esc(mv(y.x.f).n) + kindTag(y.x.sp, y.x.f) + ' → ' + esc(y.x.mm.n) + ' ' + typeTag(y.x.t) + '</div></div><span class="dmg">' + fmt(y.d) + '</span><button class="add" data-add="' + y.x.sp.k + '" data-mode="' + y.x.mode + '" title="Hab ich">＋</button></div>').join('') + '</div>';
     const weakM = weakTo(bt).slice(0, 4).map(TYPKEY);
     if (weakM.length) html += '<h2 class="sub">Suchtext fürs Spiel</h2>' + searchBox('Dyna-Pokémon mit passendem Dyna-Angriff', 'dynamax,gigadynamax&' + weakM.map(t => '@1' + t).join(','), 'Bei Dynamax zählt der Typ der Schnell-Attacke. Gigadynamax-Pokémon prüf extra, deren Giga-Attacke ist fest.');
@@ -1993,14 +2039,14 @@
       else if ((r.upd || 0) > (l.upd || 0)) Object.assign(state.mons[state.mons.indexOf(l)] = r);
     });
     state.mons = state.mons.filter(m => !(state.del[m.uid] && state.del[m.uid] >= (m.upd || 0)));
-    if ((rem.gupd || 0) > (state.gupd || 0)) { state.tags = rem.tags || []; state.tol = rem.tol ?? state.tol; state.gupd = rem.gupd; }
+    if ((rem.gupd || 0) > (state.gupd || 0)) { state.tags = rem.tags || []; state.tol = rem.tol ?? state.tol; if (rem.wants) state.wants = rem.wants; state.gupd = rem.gupd; }
     // alte Löschmarken nach 60 Tagen vergessen
     const cut = Date.now() - 60 * 864e5; Object.keys(state.del).forEach(u => { if (state.del[u] < cut) delete state.del[u]; });
     const changed = JSON.stringify([state.mons, state.tags, state.tol]) !== before;
     if (changed) { save(true); renderAll(); }
     return changed;
   }
-  const payload = () => JSON.stringify({ v: 1, at: Date.now(), from: window.PP_WEB ? 'handy' : 'mac', mons: state.mons, del: state.del || {}, tags: state.tags || [], tol: state.tol, gupd: state.gupd || 0 });
+  const payload = () => JSON.stringify({ v: 1, at: Date.now(), from: window.PP_WEB ? 'handy' : 'mac', mons: state.mons, del: state.del || {}, tags: state.tags || [], tol: state.tol, wants: state.wants || [], gupd: state.gupd || 0 });
   async function syncNow() {
     if (!syncOn()) return;
     if (syncBusy) { syncAgain = true; return; }
@@ -2011,8 +2057,8 @@
       let rem = null; try { rem = txt ? JSON.parse(txt) : null; } catch (e) {}
       mergeRemote(rem);
       const mine = payload(), files = {};
-      const remSig = rem ? JSON.stringify([rem.mons, rem.del || {}, rem.tags || [], rem.tol, rem.gupd || 0]) : '';
-      if (JSON.stringify([state.mons, state.del || {}, state.tags || [], state.tol, state.gupd || 0]) !== remSig) files['pokeplaner.json'] = { content: mine };
+      const remSig = rem ? JSON.stringify([rem.mons, rem.del || {}, rem.tags || [], rem.tol, rem.wants || [], rem.gupd || 0]) : '';
+      if (JSON.stringify([state.mons, state.del || {}, state.tags || [], state.tol, state.wants || [], state.gupd || 0]) !== remSig) files['pokeplaner.json'] = { content: mine };
       // Der Mac legt alle 6 Stunden Events, News, Hintergründe und Bosse dazu, damit das Handy sie auch hat
       if (!window.PP_WEB && Date.now() - (syncCfg.cacheAt || 0) > 6 * 3600e3) {
         const keys = {}; ['raidhelfer-events', 'raidhelfer-news', 'pokeplaner-bgs', 'raidhelfer-bosses'].forEach(k => { try { const v = JSON.parse(localStorage.getItem(k)); if (v) keys[k] = v; } catch (e) {} });
@@ -2205,6 +2251,54 @@
       '<h3 class="sub small">Silberkronkorken: deine besten Kandidaten</h3>' + (c.silver.length ? '<div class="rank">' + c.silver.map(x => row(x, x.stat + ' auf 15 → 100 %')).join('') + '</div>' : '<div class="muted">Kein Pokémon, dem nur ein Wert fehlt.</div>') +
       '<h3 class="sub small">Goldkronkorken: deine besten Kandidaten</h3>' + (c.gold.length ? '<div class="rank">' + c.gold.map(x => row(x, 'alle Werte auf 15')).join('') + '</div>' : '<div class="muted">Keine besonderen Kandidaten.</div>');
   }
+  // ---------- Wunschliste & Tauschen ----------
+  const WANT_KIND = { have: 'haben', shiny: 'Shiny', hundo: 'Hundo (15/15/15)', lucky: 'Glücks-Pokémon', bg: 'mit Hintergrund' };
+  function wantMet(w) {
+    const sp = SP[w.k]; if (!sp) return false;
+    return state.mons.some(m => m.k === w.k && (w.kind === 'have' || (w.kind === 'shiny' && m.shiny) || (w.kind === 'lucky' && m.lucky) || (w.kind === 'bg' && m.bg) || (w.kind === 'hundo' && hasIV(m) && ivs(m).join() === '15,15,15')));
+  }
+  function wantSuggestions() {
+    const out = [], own = new Set(state.mons.map(m => m.k)), wl = new Set((state.wants || []).map(w => w.k + '|' + w.kind));
+    // stärkste Raid-Angreifer je Typ (ohne Mega), die dir fehlen
+    const TY = [...new Set(DB.flatMap(sp => sp.t))];
+    TY.forEach(t => { if (!dbErCache[t]) dbRankOf(t, 0);
+      const top = BOSSVARS.filter(v => !v.mega && !v.sp.cls).map(v => ({ v, b: bestRaidSet(v, null, { type: t, noElite: true }) })).filter(x => x.b).sort((a, b) => b.b.er - a.b.er).slice(0, 2);
+      top.forEach(x => { if (!own.has(x.v.sp.k) && !wl.has(x.v.sp.k + '|have')) out.push({ k: x.v.sp.k, kind: 'have', why: 'Top-' + t + '-Angreifer (nicht legendär)' }); }); });
+    // Shiny-Legendäre aus den aktuellen Raids, die dir fehlen
+    const lb = liveBosses(); if (lb && lb.list) lb.list.forEach(b => { const v = BV[b.key]; if (!v || v.mega || !b.shiny) return; const k = v.sp.k;
+      if (shinyWorth(v.sp.dex) && !state.mons.some(m => m.k === k && m.shiny) && !wl.has(k + '|shiny') && !out.some(o => o.k === k && o.kind === 'shiny')) out.push({ k, kind: 'shiny', why: 'gerade im Raid' }); });
+    const seen = new Set(); return out.filter(o => { const id = o.k + o.kind; if (seen.has(id)) return false; seen.add(id); return true; }).slice(0, 12);
+  }
+  function tradeCandidates() {
+    const lucky = [], legend = [];
+    const year = m => { const y = /(\d{4})/.exec(String(m.caught || '')); return y ? Number(y[1]) : 0; };
+    state.mons.forEach(m => {
+      if (m.lucky || m.crypto || m.fav || m.shiny || m.bg || m.buddy) return;
+      const sp = spOf(m); if (sp.cls === 'M') return; // Mysteriöse kann man nicht tauschen
+      if (year(m) && year(m) <= 2020) lucky.push(m);
+      if (['L', 'U'].includes(sp.cls)) { const better = state.mons.some(o => o !== m && o.k === m.k && hasIV(o) && hasIV(m) && ivs(o).reduce((a, b) => a + b) > ivs(m).reduce((a, b) => a + b)); if (better) legend.push(m); }
+    });
+    return { lucky, legend: legend.sort((a, b) => (hasIV(a) ? ivs(a).reduce((x, y) => x + y) : 0) - (hasIV(b) ? ivs(b).reduce((x, y) => x + y) : 0)).slice(0, 15) };
+  }
+  function renderWants() {
+    const el = $('#wantsBody'); if (!el) return;
+    const ws = state.wants || [];
+    const spOpts = DB.filter(sp => !sp.virtual).map(sp => '<option value="' + esc(spName(sp).replace(/<[^>]+>/g, '')) + '" data-k="' + sp.k + '">').join('');
+    let html = '<h2 class="sub">Deine Wunschliste</h2><div class="row" style="gap:6px;flex-wrap:wrap"><input id="wantIn" list="wantDl" placeholder="Pokémon suchen …" style="min-width:220px"><datalist id="wantDl">' + spOpts + '</datalist>' +
+      '<select id="wantKind">' + Object.entries(WANT_KIND).map(([k, l]) => '<option value="' + k + '">' + l + '</option>').join('') + '</select><button class="btn mini" data-wantadd="1">Hinzufügen</button></div>';
+    html += ws.length ? '<div class="rank">' + ws.map((w, i) => { const sp = SP[w.k]; if (!sp) return ''; const ok = wantMet(w);
+      return '<div class="rk' + (ok ? ' done' : '') + '">' + img(sp, 'spr', w.kind === 'shiny') + '<div class="grow"><b>' + spName(sp) + '</b> <span class="fm">' + WANT_KIND[w.kind] + '</span>' + (ok ? ' <span class="rdy ok">✓ hast du</span>' : '') + (w.why ? '<div class="sub small2 muted">' + esc(w.why) + '</div>' : '') + '</div><button class="btn mini" data-wantdel="' + i + '">Entfernen</button></div>'; }).join('') + '</div>'
+      : '<div class="muted">Noch leer. Oben eintragen oder unten Vorschläge übernehmen.</div>';
+    let sug = []; try { sug = wantSuggestions(); } catch (e) {}
+    if (sug.length) html += '<h3 class="sub small">Vorschläge</h3><div class="rank">' + sug.map(o => '<div class="rk">' + img(SP[o.k], 'spr', o.kind === 'shiny') + '<div class="grow"><b>' + spName(SP[o.k]) + '</b> <span class="fm">' + WANT_KIND[o.kind] + '</span><div class="sub small2 muted">' + esc(o.why) + '</div></div><button class="btn mini" data-wantsug="' + o.k + '|' + o.kind + '|' + esc(o.why) + '">+ auf die Liste</button></div>').join('') + '</div>';
+    const tc = tradeCandidates();
+    html += '<h2 class="sub">Zum Tauschen</h2><p class="muted small2">Seit Anfang 2026 wird ein Pokémon, das schon seit 2020 oder früher in deiner Box ist, beim Tausch garantiert ein Glücks-Pokémon (bis zum Limit). Shinys, Favoriten, Hintergründe, Crypto und Kumpel sind hier ausgenommen, Mysteriöse lassen sich nicht tauschen.</p>';
+    html += '<h3 class="sub small">Garantiert Glück (2020 oder früher gefangen): ' + tc.lucky.length + '</h3>' + (tc.lucky.length ? '<div class="rank">' + tc.lucky.slice(0, 15).map(m => '<div class="rk" data-goto="' + m.uid + '">' + img(spOf(m), 'spr') + '<div class="grow"><b>' + monTitle(m) + '</b><div class="sub small2 muted">gefangen ' + esc(String(m.caught)) + '</div></div></div>').join('') + '</div>' : '<div class="muted small2">Keine gefunden. Das Fangdatum kommt aus dem Screenshot-Import, bei anderen Pokémon fehlt es.</div>');
+    html += '<h3 class="sub small">Legendäre Doppelte für Glückstausche</h3>' + (tc.legend.length ? '<div class="rank">' + tc.legend.map(m => '<div class="rk" data-goto="' + m.uid + '">' + img(spOf(m), 'spr') + '<div class="grow"><b>' + monTitle(m) + '</b><div class="sub small2 muted">du hast ein besseres, als Glücks-Pokémon wird es billiger zum Hochleveln</div></div></div>').join('') + '</div>' : '<div class="muted small2">Keine doppelten Legendären.</div>');
+    const open = ws.filter(w => !wantMet(w));
+    if (open.length) html += searchBox('Suchtext: Wünsche bei Freunden finden (für deren Box)', [...new Set(open.map(w => String(SP[w.k] ? SP[w.k].dex : '')).filter(Boolean))].join(','), 'Schick den Text an Freunde, damit sie in ihrer Box nachschauen können.');
+    el.innerHTML = html;
+  }
   function renderAdvisor() {
     const el = $('#advisorBody'); if (!el) return;
     let html = '';
@@ -2273,7 +2367,7 @@
   }
   function renderAll() {
     renderSide();
-    ({ overview: renderOverview, mine: renderMine, team: renderTeam, ranking: renderRanking, advisor: renderAdvisor, rocket: renderRocket, raids: renderRaids, rranking: renderRRanking, events: renderEvents, settings: () => { renderSources(); renderNotifSettings(); renderBackup(); renderSubs(); }, cleanup: renderCleanup, pvp: renderPvp }[current] || (() => {}))();
+    ({ overview: renderOverview, mine: renderMine, team: renderTeam, ranking: renderRanking, advisor: renderAdvisor, wants: renderWants, rocket: renderRocket, raids: renderRaids, rranking: renderRRanking, events: renderEvents, settings: () => { renderSources(); renderNotifSettings(); renderBackup(); renderSubs(); }, cleanup: renderCleanup, pvp: renderPvp }[current] || (() => {}))();
   }
   function show(v) {
     if (v === 'mine' && current !== 'mine') mineFreeze = { cfg: '', order: [] };
@@ -2291,7 +2385,7 @@
   const monBy = uid => state.mons.find(m => m.uid === Number(uid));
   function goto(uid) { showDetail(uid); }
   document.addEventListener('click', e => {
-    const t = e.target.closest('[data-pvclear],[data-pvslot],[data-pvclose],[data-pvchoose],[data-synccopy],[data-syncnow],[data-syncoff],[data-syncset],[data-bgreload],[data-scflag],[data-scall],[data-scdel],[data-scsave],[data-scclear],[data-allbg],[data-league],[data-build],[data-usesugg],[data-clearteam],[data-copy],[data-ics],[data-nt],[data-toggle],[data-tagt],[data-tagf],[data-tagdel],[data-evm],[data-evf],[data-evtab],[data-ivset],[data-hundo],[data-pick],[data-add],[data-tog],[data-del],[data-open],[data-goto],[data-detail],[data-mode-set],[data-show2],[data-mf],[data-rk],[data-mlgmore],[data-pf],[data-boss],.card');
+    const t = e.target.closest('[data-pvclear],[data-pvslot],[data-pvclose],[data-pvchoose],[data-synccopy],[data-syncnow],[data-syncoff],[data-syncset],[data-bgreload],[data-scflag],[data-scall],[data-scdel],[data-scsave],[data-scclear],[data-allbg],[data-league],[data-build],[data-usesugg],[data-clearteam],[data-copy],[data-ics],[data-nt],[data-toggle],[data-tagt],[data-tagf],[data-tagdel],[data-evm],[data-evf],[data-evtab],[data-ivset],[data-hundo],[data-pick],[data-add],[data-tog],[data-del],[data-open],[data-goto],[data-detail],[data-mode-set],[data-show2],[data-mf],[data-rk],[data-wantadd],[data-wantdel],[data-wantsug],[data-mlgmore],[data-pf],[data-boss],.card');
     if (!t) return;
     if (t.dataset.pick) { const m = addMon(t.dataset.pick); closePicker(); showDetail(m.uid); return; }
     if (t.dataset.add) { const m = addMon(t.dataset.add, t.dataset.mode); if (t.dataset.crypto) m.crypto = true; save(); showDetail(m.uid); return; }
@@ -2328,6 +2422,10 @@
     if (t.dataset.ivset) { const m = monBy(t.dataset.uid), i = Number(t.dataset.i), v = Number(t.dataset.ivset); m.iv[i] = v; if (m.lvl) { const w = wpFor(m); if (w) m.wp = w; } else { const l = levelFromWp(m); if (l) { m.lvl = l; m.lvlSrc = 'wp'; } } save(); renderAll(); return; }
     if (t.dataset.hundo) { const m = monBy(t.dataset.hundo); m.iv = [15, 15, 15]; if (m.lvl) { const w = wpFor(m); if (w) m.wp = w; } save(); renderAll(); return; }
     if (t.dataset.mlgmore) { const g = t.dataset.mlgmore, a = new Set(state.ui.mlgMore || []); a.has(g) ? a.delete(g) : a.add(g); state.ui.mlgMore = [...a]; save(); mineFreeze.cfg = null; renderMine(); return; }
+    if (t.dataset.wantadd) { const q = ($('#wantIn').value || '').trim().toLowerCase(), sp = DB.find(x => spName(x).replace(/<[^>]+>/g, '').toLowerCase() === q) || DB.find(x => x.de.toLowerCase() === q || x.en.toLowerCase() === q);
+      if (!sp) { $('#wantIn').style.outline = '2px solid #e55'; return; } (state.wants = state.wants || []).push({ k: sp.k, kind: $('#wantKind').value }); save(); renderWants(); return; }
+    if (t.dataset.wantdel !== undefined) { state.wants.splice(Number(t.dataset.wantdel), 1); save(); renderWants(); return; }
+    if (t.dataset.wantsug) { const [k, kind, why] = t.dataset.wantsug.split('|'); (state.wants = state.wants || []).push({ k, kind, why }); save(); renderWants(); return; }
     if (t.dataset.rk) { state.ui.rk = t.dataset.rk; save(); renderRocket(); return; }
     if (t.dataset.mf) { state.ui.mf = state.ui.mf || {}; state.ui.mf[t.dataset.mf] = !state.ui.mf[t.dataset.mf]; save(); renderMine(); return; }
     if (t.dataset.pf) { state.ui.pf = state.ui.pf || {}; state.ui.pf[t.dataset.pf] = !state.ui.pf[t.dataset.pf]; save(); renderPicker(); return; }
@@ -2472,7 +2570,7 @@
     else { b.dataset.confirm = '1'; b.textContent = 'Wirklich? Nochmal klicken'; setTimeout(() => { b.textContent = 'Alles zurücksetzen'; delete b.dataset.confirm; }, 3000); }
   });
 
-  window.__rh = { BOSSVARS, eff, mv, loadBulba, bgList, bgsFor, addMon, statsOf, bestRaidSet, bestMaxFast, raidScore, maxDmg, plan, roleOf, levelCost, importCSV, pickTeam, mapLive, state: () => state, SP, BV, renderAll, show, showDetail, MAXCANDS };
+  window.__rh = { nickOptions, BOSSVARS, eff, mv, loadBulba, bgList, bgsFor, addMon, statsOf, bestRaidSet, bestMaxFast, raidScore, maxDmg, plan, roleOf, levelCost, importCSV, pickTeam, mapLive, state: () => state, SP, BV, renderAll, show, showDetail, MAXCANDS };
   save();
   show('mine');
 })();

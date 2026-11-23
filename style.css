@@ -536,3 +536,7 @@ ul.why li{margin:2px 0}
   .grp-b{order:2;flex-basis:100%;flex-direction:row;margin:0;padding:0;border:0;overflow-x:auto}
   .side nav.bottom-nav{order:1}
 }
+
+.nicks{display:grid;gap:4px}.nick{display:grid;grid-template-columns:110px 1fr auto auto;gap:8px;align-items:center}.nick code{font-size:15px;letter-spacing:.5px}
+
+.rk.done{opacity:.6}

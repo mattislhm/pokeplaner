@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <title>PokéPlaner</title>
-<link rel="stylesheet" href="style.css?v=1795433989">
+<link rel="stylesheet" href="style.css?v=1795435046">
 </head>
 <body>
 <div class="app">
@@ -30,6 +30,7 @@
         <button class="nav active" data-view="mine">Meine Pokémon</button>
         <button class="nav" data-view="cleanup">Aufräumen</button>
         <button class="nav" data-view="advisor">Ratgeber</button>
+        <button class="nav" data-view="wants">Wunschliste &amp; Tausch</button>
       </div></div>
       <div class="grp"><button class="grp-h" data-grp="raid">⚔️ Raids</button><div class="grp-b">
         <button class="nav" data-view="raids">Team-Planer</button>
@@ -198,6 +199,11 @@
       <div id="rocketOut"></div>
     </section>
 
+    <section class="view" id="view-wants">
+      <header class="vh"><h1>Wunschliste &amp; Tausch</h1><p class="muted">Was du noch suchst, und was du zum Tauschen hergeben kannst.</p></header>
+      <div id="wantsBody"></div>
+    </section>
+
     <section class="view" id="view-settings">
       <header class="vh"><h1>Einstellungen</h1></header>
       <div class="panel">
@@ -266,11 +272,11 @@
   </div>
 </div>
 
-<script src="shim.js?v=1795433989"></script>
+<script src="shim.js?v=1795435046"></script>
 <script src="vendor/qrcode.js"></script>
-<script src="data.js?v=1795433989"></script>
-<script src="data_pvp.js?v=1795433989"></script>
-<script src="data_pool.js?v=1795433989"></script>
-<script src="app.js?v=1795433989"></script>
+<script src="data.js?v=1795435046"></script>
+<script src="data_pvp.js?v=1795435046"></script>
+<script src="data_pool.js?v=1795435046"></script>
+<script src="app.js?v=1795435046"></script>
 </body>
 </html>
