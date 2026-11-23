@@ -522,8 +522,7 @@
     const sp = spOf(m), name = sp.de, out = [];
     if (hasIV(m)) {
       const iv = ivs(m), pct = Math.round((iv[0] + iv[1] + iv[2]) / 45 * 100), hundo = pct === 100;
-      out.push(['IV kurz', nickFit(name, iv.map(x => CIRC[x]).join(''))]);
-      out.push(['IV in %', nickFit(name, hundo ? '★100' : String(pct))]);
+      out.push(['IV in Prozent', nickFit(name, String(pct))]);
       out.push(['IV mit Strich', nickFit(name, iv.join('/'))]);
       // PvP: Liga mit IV-Rang, ✓ wenn fertig
       const tags = [];
@@ -531,11 +530,10 @@
         const w = Number(m.wp) || statsOf(m).cp; if (cap < 10000 && w > cap) return;
         const meta = metaOf('all|' + cap); if (meta.length && !meta.some(x => x.id === pvIdOf(m))) return;
         const r = myRank(m, cap); if (!r || r.rank > 100) return;
-        let ok = false; try { ok = pvStatus(m, { key: 'all|' + cap, cp: cap }).ok; } catch (e) {}
-        tags.push(lg + r.rank + (ok ? '✓' : ''));
+        tags.push(lg + r.rank);
       });
       if (tags.length) out.push(['PvP', nickFit(name, tags[0])]);
-      if (tags.length > 1) out.push(['PvP alle Ligen', nickFit(name, tags.join(''))]);
+      if (tags.length > 1) out.push(['PvP alle Ligen', nickFit(name, tags.join(' '))]);
     }
     // Raid: Typ-Kürzel und Platz in der Datenbank
     try { const v = baseVar(sp), b = bestRaidSet(v, null, { st: statsOf(m) }); if (b) { const t = mv(b.c).t, r = dbRankOf(t, b.er); if (r <= 50) out.push(['Raid', nickFit(name, t.slice(0, 3) + r)]); } } catch (e) {}
@@ -543,7 +541,7 @@
   }
   function nickBlock(m) {
     const o = nickOptions(m); if (!o.length) return '';
-    return '<h3 class="h3">Spitzname fürs Spiel</h3><div class="nicks">' + o.map(([l, n]) => '<div class="nick"><span class="muted small2">' + l + '</span><code>' + esc(n) + '</code><span class="muted small2">' + nickLen(n) + '/12</span><button class="btn mini" data-copy="' + esc(n) + '">Kopieren</button></div>').join('') + '</div><div class="muted small2">GL/UL/ML mit IV-Rang, ✓ = fertig gebaut. Raid: Angriffstyp und Platz unter allen Angreifern.</div>';
+    return '<h3 class="h3">Spitzname fürs Spiel</h3><div class="nicks">' + o.map(([l, n]) => '<div class="nick"><span class="muted small2">' + l + '</span><code>' + esc(n) + '</code><span class="muted small2">' + nickLen(n) + '/12</span><button class="btn mini" data-copy="' + esc(n) + '">Kopieren</button></div>').join('') + '</div><div class="muted small2">GL/UL/ML mit IV-Rang. Raid: Angriffstyp und Platz unter allen Angreifern.</div>';
   }
   function monDetail(m) {
     const sp = spOf(m), st = statsOf(m), role = roleOf(m), p = plan(m, role), r = ivRating(m, role === 'att' || role === 'raid');
