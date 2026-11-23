@@ -539,9 +539,43 @@
     try { const v = baseVar(sp), b = bestRaidSet(v, null, { st: statsOf(m) }); if (b) { const t = mv(b.c).t, r = dbRankOf(t, b.er); if (r <= 50) out.push(['Raid', nickFit(name, t.slice(0, 3) + r)]); } } catch (e) {}
     return out.filter(o => nickLen(o[1]) <= NICK_MAX);
   }
+  // Baukasten: Teile anklicken, Reihenfolge = Klickreihenfolge, gilt für alle Pokémon
+  const HEX = '0123456789ABCDEF';
+  const NICK_SYM = [['*', 1], ['+', 1], ['!', 1], ['#', 1], ['♥', 2], ['★', 2], ['☆', 2], ['✓', 2], ['♂', 2], ['♀', 2]];
+  function nickParts(m) {
+    const sp = spOf(m), P = {}, n = sp.de.replace(/\s+/g, '');
+    P.name = ['Name', n]; P.short = ['Name kurz', [...n].slice(0, 5).join('')];
+    if (hasIV(m)) {
+      const iv = ivs(m), pct = Math.round((iv[0] + iv[1] + iv[2]) / 45 * 100);
+      P.pct = ['IV Prozent', String(pct)]; P.ivd = ['IV Punkte', iv.join('.')]; P.ivs = ['IV Strich', iv.join('/')];
+      P.hex = ['IV Hex', iv.map(x => HEX[x]).join('')]; P.circ = ['IV Kreis', iv.map(x => CIRC[x]).join('')];
+      [[1500, 'GL'], [2500, 'UL'], [10000, 'ML']].forEach(([cap, lg]) => {
+        const w = Number(m.wp) || statsOf(m).cp; if (cap < 10000 && w > cap) return;
+        const meta = metaOf('all|' + cap); if (meta.length && !meta.some(x => x.id === pvIdOf(m))) return;
+        const r = myRank(m, cap); if (r && r.rank <= 999) P[lg] = [lg + ' Rang', lg + r.rank];
+      });
+    }
+    try { const b = bestRaidSet(baseVar(sp), null, { st: statsOf(m) }); if (b) { const t = mv(b.c).t, r = dbRankOf(t, b.er); P.raid = ['Raid', t.slice(0, 3) + r]; } } catch (e) {}
+    if (m.lvl) P.lvl = ['Level', 'L' + String(statsOf(m).l || m.lvl).replace('.', ',')];
+    NICK_SYM.forEach(([c], k) => { P['s' + k] = [c, c]; });
+    return P;
+  }
+  function nickBuild(m) {
+    const P = nickParts(m), sel = (state.ui.nickParts || ['name', 'pct']).filter(k => P[k]);
+    let out = '', prevSym = true;
+    sel.forEach(k => { const v = P[k][1], sym = k[0] === 's' && k !== 'short'; out += (out && !sym && !prevSym ? ' ' : '') + v; prevSym = sym; });
+    if (nickLen(out) > NICK_MAX) out = out.replace(/ /g, '');
+    return { P, sel, out };
+  }
   function nickBlock(m) {
-    const o = nickOptions(m); if (!o.length) return '';
-    return '<h3 class="h3">Spitzname fürs Spiel</h3><div class="nicks">' + o.map(([l, n]) => '<div class="nick"><span class="muted small2">' + l + '</span><code>' + esc(n) + '</code><span class="muted small2">' + nickLen(n) + '/12</span><button class="btn mini" data-copy="' + esc(n) + '">Kopieren</button></div>').join('') + '</div><div class="muted small2">GL/UL/ML mit IV-Rang. Raid: Angriffstyp und Platz unter allen Angreifern.</div>';
+    const { P, sel, out } = nickBuild(m), len = nickLen(out), over = len > NICK_MAX;
+    const chip = k => '<button class="nkc' + (sel.includes(k) ? ' on' : '') + '" data-nkp="' + k + '" data-uid="' + m.uid + '">' + (sel.includes(k) ? '<b>' + (sel.indexOf(k) + 1) + '</b> ' : '') + esc(P[k][0]) + (P[k][0] !== P[k][1] && k !== 'name' ? ' <span class="muted">' + esc(P[k][1]) + '</span>' : '') + '</button>';
+    const keys = Object.keys(P), txt = keys.filter(k => !/^s\d/.test(k)), sym = keys.filter(k => /^s\d/.test(k));
+    return '<div class="nickb" data-nkb="' + m.uid + '"><h3 class="h3">Spitzname fürs Spiel</h3>' +
+      '<div class="nkrow">' + txt.map(chip).join('') + '</div>' +
+      '<div class="nkrow"><span class="muted small2">Symbole:</span>' + sym.map(chip).join('') + '</div>' +
+      '<div class="nick"><code' + (over ? ' class="bad"' : '') + '>' + esc(out || '–') + '</code><span class="muted small2">' + len + '/12</span><button class="btn mini" data-copy="' + esc(out) + '"' + (over || !out ? ' disabled' : '') + '>Kopieren</button>' + (sel.length ? '<button class="btn mini" data-nkreset="' + m.uid + '">Leeren</button>' : '') + '</div>' +
+      '<div class="muted small2">Antippen fügt hinzu, nochmal antippen entfernt. Die Auswahl gilt für alle Pokémon. ' + (over ? '<b>Zu lang, nimm was raus oder „Name kurz“.</b> ' : '') + 'Buchstaben, Zahlen und * + ! # sind normale Tastaturzeichen und gehen. Bei ♥ ★ ☆ ✓ ♂ ♀ und den Kreiszahlen hab ich keine sichere Quelle, teste eins im Spiel. Bunte Emojis gehen nicht.</div></div>';
   }
   function monDetail(m) {
     const sp = spOf(m), st = statsOf(m), role = roleOf(m), p = plan(m, role), r = ivRating(m, role === 'att' || role === 'raid');
@@ -2384,7 +2418,7 @@
   const monBy = uid => state.mons.find(m => m.uid === Number(uid));
   function goto(uid) { showDetail(uid); }
   document.addEventListener('click', e => {
-    const t = e.target.closest('[data-pvclear],[data-pvslot],[data-pvclose],[data-pvchoose],[data-synccopy],[data-syncnow],[data-syncoff],[data-syncset],[data-bgreload],[data-scflag],[data-scall],[data-scdel],[data-scsave],[data-scclear],[data-allbg],[data-league],[data-build],[data-usesugg],[data-clearteam],[data-copy],[data-ics],[data-nt],[data-toggle],[data-tagt],[data-tagf],[data-tagdel],[data-evm],[data-evf],[data-evtab],[data-ivset],[data-hundo],[data-pick],[data-add],[data-tog],[data-del],[data-open],[data-goto],[data-detail],[data-mode-set],[data-show2],[data-mf],[data-rk],[data-wantadd],[data-wantdel],[data-wantsug],[data-mlgmore],[data-pf],[data-boss],.card');
+    const t = e.target.closest('[data-pvclear],[data-pvslot],[data-pvclose],[data-pvchoose],[data-synccopy],[data-syncnow],[data-syncoff],[data-syncset],[data-bgreload],[data-scflag],[data-scall],[data-scdel],[data-scsave],[data-scclear],[data-allbg],[data-league],[data-build],[data-usesugg],[data-clearteam],[data-copy],[data-ics],[data-nt],[data-toggle],[data-tagt],[data-tagf],[data-tagdel],[data-evm],[data-evf],[data-evtab],[data-ivset],[data-hundo],[data-pick],[data-add],[data-tog],[data-del],[data-open],[data-goto],[data-detail],[data-mode-set],[data-show2],[data-mf],[data-rk],[data-wantadd],[data-wantdel],[data-wantsug],[data-mlgmore],[data-nkp],[data-nkreset],[data-pf],[data-boss],.card');
     if (!t) return;
     if (t.dataset.pick) { const m = addMon(t.dataset.pick); closePicker(); showDetail(m.uid); return; }
     if (t.dataset.add) { const m = addMon(t.dataset.add, t.dataset.mode); if (t.dataset.crypto) m.crypto = true; save(); showDetail(m.uid); return; }
@@ -2420,6 +2454,7 @@
     if (t.dataset.evtab) { state.ui.evtab = t.dataset.evtab; save(); renderEvents(); return; }
     if (t.dataset.ivset) { const m = monBy(t.dataset.uid), i = Number(t.dataset.i), v = Number(t.dataset.ivset); m.iv[i] = v; if (m.lvl) { const w = wpFor(m); if (w) m.wp = w; } else { const l = levelFromWp(m); if (l) { m.lvl = l; m.lvlSrc = 'wp'; } } save(); renderAll(); return; }
     if (t.dataset.hundo) { const m = monBy(t.dataset.hundo); m.iv = [15, 15, 15]; if (m.lvl) { const w = wpFor(m); if (w) m.wp = w; } save(); renderAll(); return; }
+    if (t.dataset.nkp || t.dataset.nkreset) { const m = monBy(t.dataset.uid || t.dataset.nkreset); let a = (state.ui.nickParts || ['name', 'pct']).slice(); if (t.dataset.nkreset) a = []; else { const k = t.dataset.nkp; a = a.includes(k) ? a.filter(x => x !== k) : a.concat(k); if (k === 'name') a = a.filter(x => x !== 'short'); if (k === 'short') a = a.filter(x => x !== 'name'); } state.ui.nickParts = a; save(); document.querySelectorAll('[data-nkb="' + m.uid + '"]').forEach(el => { el.outerHTML = nickBlock(m); }); return; }
     if (t.dataset.mlgmore) { const g = t.dataset.mlgmore, a = new Set(state.ui.mlgMore || []); a.has(g) ? a.delete(g) : a.add(g); state.ui.mlgMore = [...a]; save(); mineFreeze.cfg = null; renderMine(); return; }
     if (t.dataset.wantadd) { const q = ($('#wantIn').value || '').trim().toLowerCase(), sp = DB.find(x => spName(x).replace(/<[^>]+>/g, '').toLowerCase() === q) || DB.find(x => x.de.toLowerCase() === q || x.en.toLowerCase() === q);
       if (!sp) { $('#wantIn').style.outline = '2px solid #e55'; return; } (state.wants = state.wants || []).push({ k: sp.k, kind: $('#wantKind').value }); save(); renderWants(); return; }
@@ -2569,7 +2604,7 @@
     else { b.dataset.confirm = '1'; b.textContent = 'Wirklich? Nochmal klicken'; setTimeout(() => { b.textContent = 'Alles zurücksetzen'; delete b.dataset.confirm; }, 3000); }
   });
 
-  window.__rh = { nickOptions, BOSSVARS, eff, mv, loadBulba, bgList, bgsFor, addMon, statsOf, bestRaidSet, bestMaxFast, raidScore, maxDmg, plan, roleOf, levelCost, importCSV, pickTeam, mapLive, state: () => state, SP, BV, renderAll, show, showDetail, MAXCANDS };
+  window.__rh = { nickOptions, nickBuild, nickBlock, BOSSVARS, eff, mv, loadBulba, bgList, bgsFor, addMon, statsOf, bestRaidSet, bestMaxFast, raidScore, maxDmg, plan, roleOf, levelCost, importCSV, pickTeam, mapLive, state: () => state, SP, BV, renderAll, show, showDetail, MAXCANDS };
   save();
   show('mine');
 })();

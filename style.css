@@ -540,3 +540,5 @@ ul.why li{margin:2px 0}
 .nicks{display:grid;gap:4px}.nick{display:grid;grid-template-columns:110px 1fr auto auto;gap:8px;align-items:center}.nick code{font-size:15px;letter-spacing:.5px}
 
 .rk.done{opacity:.6}
+
+.nkrow{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:4px 0}.nkc{border:1px solid var(--line,#444);background:transparent;color:inherit;border-radius:12px;padding:3px 9px;font-size:12px;cursor:pointer}.nkc.on{background:var(--acc,#3b82f6);border-color:var(--acc,#3b82f6);color:#fff}.nkc.on .muted{color:#fff;opacity:.8}.nickb .nick{grid-template-columns:1fr auto auto auto;margin-top:6px}.nickb code.bad{color:#e55}
