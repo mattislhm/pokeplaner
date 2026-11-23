@@ -1789,7 +1789,7 @@
     if (!window.rhNet || window.rhNet.web || !bgData) return;
     if (!force && bgData.bpAt && Date.now() - bgData.bpAt < 3 * 864e5) return;
     window.rhNet.get(BULBA).then(r => {
-      if (!r || !r.ok) return;
+      if (!r || !r.ok) { bgData.bpErr = (r && (r.error || ('HTTP ' + r.status))) || 'keine Antwort'; return; }
       const doc = new DOMParser().parseFromString(r.text, 'text/html'), out = [];
       doc.querySelectorAll('table').forEach(tb => {
         if (![...tb.querySelectorAll('th')].some(th => /pok[eé]mon/i.test(th.textContent))) return;
@@ -1810,7 +1810,8 @@
           else dex.forEach(d => { if (!last.dex.includes(d)) last.dex.push(d); });
         });
       });
-      if (out.length) { bgData.bp = out; bgData.bpAt = Date.now(); saveBgs(); renderAll(); }
+      if (!out.length) bgData.bpErr = 'Tabelle nicht erkannt';
+      if (out.length) { bgData.bpErr = ''; bgData.bp = out; bgData.bpAt = Date.now(); saveBgs(); renderAll(); }
     }).catch(() => {});
   }
   const bgTok = n => String(n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w && !/^(go|pokemon|background|special|the|of|and|20\d\d)$/.test(w));
@@ -1846,7 +1847,7 @@
     const opts = bgsFor(sp);
     const others = m.allBg ? bgList().filter(b => !opts.includes(b)).sort((a, b) => b.d - a.d) : [];
     const opt = b => '<option value="' + b.id + '"' + (m.bg === b.id ? ' selected' : '') + '>' + esc(b.n) + (b.d ? ' (' + new Date(b.d).getFullYear() + ')' : '') + '</option>';
-    const more = '<button class="btn mini" data-allbg="' + m.uid + '">' + (m.allBg ? 'Nur passende zeigen' : 'Fehlt einer? Alle zeigen') + '</button>' + (bgLoading ? '<span class="muted small2 bgprog"></span>' : '<button class="btn mini" data-bgreload="1">Liste neu laden</button><span class="muted small2" title="Anzahl Hintergründe je Quelle"> Dittobase ' + ((bgData && bgData.list || []).length) + ' · Bulbapedia ' + ((bgData && bgData.bp || []).length) + '</span>');
+    const more = '<button class="btn mini" data-allbg="' + m.uid + '">' + (m.allBg ? 'Nur passende zeigen' : 'Fehlt einer? Alle zeigen') + '</button>' + (bgLoading ? '<span class="muted small2 bgprog"></span>' : '<button class="btn mini" data-bgreload="1">Liste neu laden</button><span class="muted small2" title="Anzahl Hintergründe je Quelle"> Dittobase ' + ((bgData && bgData.list || []).length) + ' · Bulbapedia ' + ((bgData && bgData.bp || []).length) + (bgData && bgData.bpErr && !(bgData.bp || []).length ? ' (' + esc(bgData.bpErr) + ')' : '') + '</span>');
     if (!opts.length && !cur && !m.allBg) return '<div class="bgrow"><span class="muted small2">Für ' + esc(sp.de) + ' sind keine Ortshintergründe bekannt.</span>' + more + '</div>';
     return '<div class="bgrow"><select data-bg="1" data-uid="' + m.uid + '"><option value="">– kein Hintergrund –</option>' + (others.length ? '<optgroup label="Passend">' + opts.map(opt).join('') + '</optgroup><optgroup label="Alle anderen">' + others.map(opt).join('') + '</optgroup>' : opts.map(opt).join('')) +
       (cur && !opts.some(b => b.id === cur.id) ? '<option value="' + esc(cur.id) + '" selected>' + esc(cur.n) + '</option>' : '') + '</select>' +
